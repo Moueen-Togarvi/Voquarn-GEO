@@ -1,8 +1,5 @@
 // Voquarn GEO Platform — Prisma schema.
 // Docs: https://pris.ly/d/prisma-schema
-//
-// The monitoring data model (Brand, ScanRun, Result, etc.) is added in
-// Phase 1.1. This file currently establishes the generator + datasource.
 
 generator client {
   provider = "prisma-client"
@@ -13,4 +10,149 @@ datasource db {
   provider = "postgresql"
   // Prisma 7: connection URLs live in prisma.config.ts (for Migrate) and the
   // runtime client uses a driver adapter (see src/lib/db.ts). No `url` here.
+}
+
+// ─────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────
+
+enum ScanStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+}
+
+enum Engine {
+  OPENAI
+  CLAUDE
+  GEMINI
+  PERPLEXITY
+}
+
+enum Sentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+// ─────────────────────────────────────────────────────────────
+// Models
+// ─────────────────────────────────────────────────────────────
+
+/// An application user, mirrored from Clerk. `clerkId` is the source of truth
+/// for identity; we keep a local row so brands can hang off a stable FK.
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String
+  createdAt DateTime @default(now())
+
+  brands Brand[]
+
+  @@index([clerkId])
+}
+
+/// A brand the user is monitoring across AI engines.
+model Brand {
+  id          String   @id @default(cuid())
+  name        String
+  domain      String
+  industry    String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  competitors      Competitor[]
+  prompts          Prompt[]
+  scanRuns         ScanRun[]
+  visibilityScores VisibilityScore[]
+
+  @@index([userId])
+}
+
+/// A competitor brand we watch for in AI answers alongside the tracked brand.
+model Competitor {
+  id     String  @id @default(cuid())
+  name   String
+  domain String?
+
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId])
+}
+
+/// A realistic buyer-intent query we run through the engines for a brand.
+model Prompt {
+  id        String   @id @default(cuid())
+  text      String
+  category  String
+  createdAt DateTime @default(now())
+
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  results Result[]
+
+  @@index([brandId])
+}
+
+/// One execution of all prompts across all engines for a brand.
+model ScanRun {
+  id          String     @id @default(cuid())
+  status      ScanStatus @default(PENDING)
+  startedAt   DateTime   @default(now())
+  completedAt DateTime?
+
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  results          Result[]
+  visibilityScores VisibilityScore[]
+
+  @@index([brandId])
+}
+
+/// The response from a single engine to a single prompt, plus parsed signals.
+model Result {
+  id             String     @id @default(cuid())
+  engine         Engine
+  responseText   String
+  brandMentioned Boolean    @default(false)
+  position       Int?
+  sentiment      Sentiment?
+  citedSources   String[]
+  createdAt      DateTime   @default(now())
+
+  promptId String
+  prompt   Prompt @relation(fields: [promptId], references: [id], onDelete: Cascade)
+
+  scanRunId String
+  scanRun   ScanRun @relation(fields: [scanRunId], references: [id], onDelete: Cascade)
+
+  @@index([scanRunId])
+  @@index([promptId])
+  @@index([scanRunId, engine])
+}
+
+/// Aggregated per-engine visibility metrics for one scan run.
+model VisibilityScore {
+  id           String @id @default(cuid())
+  engine       Engine
+  score        Float // % of prompts where the brand was mentioned (0-100)
+  shareOfVoice Float // brand mentions / (brand + competitor mentions)
+  citationRate Float // % of prompts where the brand's domain was cited
+
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  scanRunId String
+  scanRun   ScanRun @relation(fields: [scanRunId], references: [id], onDelete: Cascade)
+
+  @@unique([scanRunId, engine])
+  @@index([brandId, scanRunId])
 }
