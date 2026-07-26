@@ -1,0 +1,16 @@
+// Voquarn GEO Platform — Prisma schema.
+// Docs: https://pris.ly/d/prisma-schema
+//
+// The monitoring data model (Brand, ScanRun, Result, etc.) is added in
+// Phase 1.1. This file currently establishes the generator + datasource.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Prisma 7: connection URLs live in prisma.config.ts (for Migrate) and the
+  // runtime client uses a driver adapter (see src/lib/db.ts). No `url` here.
+}
