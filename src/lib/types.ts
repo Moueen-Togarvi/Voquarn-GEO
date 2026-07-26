@@ -7,6 +7,8 @@ export {
   ScanStatus,
   Sentiment,
   Severity,
+  Tier,
+  SubscriptionStatus,
 } from "@/generated/prisma/client";
 
 export type {
@@ -18,4 +20,5 @@ export type {
   Result,
   VisibilityScore,
   Gap,
+  Subscription,
 } from "@/generated/prisma/client";

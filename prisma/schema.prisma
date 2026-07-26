@@ -42,6 +42,19 @@ enum Severity {
   LOW
 }
 
+enum Tier {
+  STARTER
+  PRO
+  AGENCY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELED
+}
+
 // ─────────────────────────────────────────────────────────────
 // Models
 // ─────────────────────────────────────────────────────────────
@@ -54,9 +67,25 @@ model User {
   email     String
   createdAt DateTime @default(now())
 
-  brands Brand[]
+  brands       Brand[]
+  subscription Subscription?
 
   @@index([clerkId])
+}
+
+/// The user's billing subscription (Paddle). Absent = free STARTER defaults.
+model Subscription {
+  id               String             @id @default(cuid())
+  tier             Tier               @default(STARTER)
+  status           SubscriptionStatus @default(ACTIVE)
+  paddleCustomerId String?
+  paddleSubId      String?            @unique
+  currentPeriodEnd DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 /// A brand the user is monitoring across AI engines.
