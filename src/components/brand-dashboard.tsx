@@ -1,8 +1,15 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Play, Loader2, ChevronDown, ExternalLink } from "lucide-react";
+import {
+  Play,
+  Loader2,
+  ChevronDown,
+  ExternalLink,
+  ListChecks,
+} from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -113,19 +120,29 @@ export function BrandDashboardView({ data }: { data: BrandDashboard }) {
             {data.brand.domain} · {data.brand.industry}
           </p>
         </div>
-        <Button onClick={runScan} disabled={scanning}>
-          {scanning ? (
-            <>
-              <Loader2 className="size-4 animate-spin" />
-              Scanning…
-            </>
-          ) : (
-            <>
-              <Play className="size-4" />
-              {data.hasScan ? "Re-run scan" : "Run scan"}
-            </>
-          )}
-        </Button>
+        <div className="flex items-center gap-2">
+          {data.hasScan ? (
+            <Button asChild variant="outline">
+              <Link href={`/brands/${data.brand.id}/actions`}>
+                <ListChecks className="size-4" />
+                Action Center
+              </Link>
+            </Button>
+          ) : null}
+          <Button onClick={runScan} disabled={scanning}>
+            {scanning ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                Scanning…
+              </>
+            ) : (
+              <>
+                <Play className="size-4" />
+                {data.hasScan ? "Re-run scan" : "Run scan"}
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {!data.hasScan ? (
