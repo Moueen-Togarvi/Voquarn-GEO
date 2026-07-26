@@ -10,17 +10,17 @@ export async function getCurrentUser(): Promise<User | null> {
   const { userId: clerkId } = await auth();
   if (!clerkId) return null;
 
-  const existing = await db.user.findUnique({ where: { clerkId } });
-  if (existing) return existing;
-
-  // First time we've seen this Clerk user — create the local row.
   const clerkUser = await currentUser();
   const email =
     clerkUser?.primaryEmailAddress?.emailAddress ??
     clerkUser?.emailAddresses[0]?.emailAddress ??
     "";
 
-  return db.user.create({ data: { clerkId, email } });
+  return db.user.upsert({
+    where: { clerkId },
+    create: { clerkId, email },
+    update: email ? { email } : {},
+  });
 }
 
 /**

@@ -225,9 +225,20 @@ export function ActionCenter({ brandId }: { brandId: string }) {
         </div>
       ) : total === 0 ? (
         <Card>
-          <CardContent className="text-muted-foreground py-16 text-center text-sm">
-            No gaps found. Run a scan and re-analyze — gaps appear where
-            competitors win and your brand is missing.
+          <CardContent className="text-muted-foreground space-y-2 py-16 text-center text-sm">
+            <p className="text-foreground font-medium">No gaps found yet.</p>
+            <p>
+              Gaps appear where a <strong>competitor</strong> is mentioned in AI
+              answers but your brand is not. To surface them:
+            </p>
+            <p>
+              1. Make sure this brand has competitors (edit the brand and add a
+              few).
+              <br />
+              2. Run a scan on the brand.
+              <br />
+              3. Come back here and click “Re-analyze gaps”.
+            </p>
           </CardContent>
         </Card>
       ) : (

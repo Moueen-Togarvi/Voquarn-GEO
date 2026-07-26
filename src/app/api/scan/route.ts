@@ -3,6 +3,7 @@ import { z } from "zod";
 import { ScanStatus } from "@/lib/types";
 import { requireBrandOwnership } from "@/lib/auth";
 import { createPendingScanRun, runScan } from "@/lib/scan/runner";
+import { engines } from "@/lib/engines";
 
 // A scan fans out across many engine calls; give the function room to finish
 // its background work. Adjust with the deploy plan's function limits.
@@ -22,6 +23,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "brandId is required" }, { status: 400 });
   }
   const { brandId } = parsed.data;
+
+  if (engines.length === 0) {
+    return NextResponse.json(
+      {
+        error:
+          "Agent router is not configured. Set both AGENT_ROUTER_API_KEY and AGENT_ROUTER_BASE_URL.",
+      },
+      { status: 503 },
+    );
+  }
 
   const access = await requireBrandOwnership(brandId);
   if (!access.ok) {

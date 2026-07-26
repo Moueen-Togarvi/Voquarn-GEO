@@ -56,12 +56,19 @@ export function AddBrandDialog() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // Include a competitor typed into the field but not yet "Added" as a chip,
+    // so a user who types one and submits directly doesn't lose it.
+    const draft = competitorDraft.trim();
+    const allCompetitors =
+      draft && !competitors.includes(draft)
+        ? [...competitors, draft]
+        : competitors;
     const parsed = brandInputSchema.safeParse({
       name,
       domain,
       industry,
       description,
-      competitors,
+      competitors: allCompetitors,
     });
     if (!parsed.success) {
       toast.error(
