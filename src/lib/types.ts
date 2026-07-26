@@ -6,6 +6,7 @@ export {
   Engine,
   ScanStatus,
   Sentiment,
+  Severity,
 } from "@/generated/prisma/client";
 
 export type {
@@ -16,4 +17,5 @@ export type {
   ScanRun,
   Result,
   VisibilityScore,
+  Gap,
 } from "@/generated/prisma/client";

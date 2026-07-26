@@ -36,6 +36,12 @@ enum Sentiment {
   NEGATIVE
 }
 
+enum Severity {
+  HIGH
+  MEDIUM
+  LOW
+}
+
 // ─────────────────────────────────────────────────────────────
 // Models
 // ─────────────────────────────────────────────────────────────
@@ -70,6 +76,7 @@ model Brand {
   prompts          Prompt[]
   scanRuns         ScanRun[]
   visibilityScores VisibilityScore[]
+  gaps             Gap[]
 
   @@index([userId])
 }
@@ -155,4 +162,24 @@ model VisibilityScore {
 
   @@unique([scanRunId, engine])
   @@index([brandId, scanRunId])
+}
+
+/// A prompt where the brand is absent but competitors win — an actionable
+/// optimization opportunity surfaced by gap analysis. Persisted so the Action
+/// Center can track completion.
+model Gap {
+  id                 String   @id @default(cuid())
+  promptText         String
+  category           String
+  competitorsWinning String[]
+  citedSources       String[]
+  severity           Severity
+  recommendedAction  String
+  addressed          Boolean  @default(false)
+  createdAt          DateTime @default(now())
+
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId])
 }
