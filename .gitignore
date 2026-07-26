@@ -48,3 +48,6 @@ next-env.d.ts
 /.windsurf
 /.claude
 skills-lock.json
+
+# clerk configuration (can include secrets)
+/.clerk/
