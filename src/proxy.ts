@@ -12,8 +12,9 @@ const isProtectedRoute = createRouteMatcher([
   "/actions(.*)",
   "/settings(.*)",
   "/onboarding(.*)",
-  // Protect API routes except public webhooks (Clerk, Paddle).
-  "/api/((?!webhooks).*)",
+  // Protect API routes except public webhooks (Clerk, Paddle) and cron
+  // (guarded by CRON_SECRET instead of a Clerk session).
+  "/api/((?!webhooks|cron).*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
