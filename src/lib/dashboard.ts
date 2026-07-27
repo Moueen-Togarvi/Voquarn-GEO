@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { Engine, Sentiment, ScanStatus } from "@/lib/types";
+import { Engine, Sentiment, ScanStatus, type ScanFrequency } from "@/lib/types";
 import { ENGINE_ORDER } from "@/lib/scan/serialize";
 
 export interface EngineCardData {
@@ -7,19 +7,26 @@ export interface EngineCardData {
   score: number;
   shareOfVoice: number;
   citationRate: number;
+  /** Average ordinal rank across prompts where the brand was named, or null. */
+  avgRank: number | null;
 }
 
 export interface PromptRow {
   promptText: string;
   category: string;
+  volume: number | null;
+  tags: string[];
   /** engine -> mentioned (undefined = not queried on this engine). */
   mentions: Partial<Record<Engine, boolean>>;
+  /** Best (lowest) rank the brand achieved for this prompt across engines. */
+  bestRank: number | null;
   /** engine -> full result detail for the expandable row. */
   details: {
     engine: Engine;
     responseText: string;
     citedSources: string[];
     sentiment: Sentiment | null;
+    rank: number | null;
   }[];
 }
 
@@ -30,16 +37,25 @@ export interface TrendPoint {
 }
 
 export interface BrandDashboard {
-  brand: { id: string; name: string; domain: string; industry: string };
+  brand: {
+    id: string;
+    name: string;
+    domain: string;
+    industry: string;
+    scanFrequency: ScanFrequency;
+  };
   hasScan: boolean;
   latestScanStatus: ScanStatus | null;
   overallScore: number;
+  /** Change in overall score vs the previous scan (null if only one scan). */
+  trendDelta: number | null;
   engineCards: EngineCardData[];
   /** Share of voice: brand + each competitor, for the bar chart. */
   shareOfVoice: { name: string; value: number }[];
   trend: TrendPoint[];
   prompts: PromptRow[];
   sentiment: { positive: number; neutral: number; negative: number };
+  competitors: string[];
 }
 
 /**
@@ -77,24 +93,63 @@ export async function getBrandDashboard(
 
   const latestRun = runs[runs.length - 1] ?? null;
 
+  // Delta vs the previous scan's overall score.
+  const trendDelta =
+    trend.length >= 2
+      ? Math.round(
+          (trend[trend.length - 1].score - trend[trend.length - 2].score) * 10,
+        ) / 10
+      : null;
+
+  const competitorNames = brand.competitors.map((c) => c.name);
+
   const base: BrandDashboard = {
     brand: {
       id: brand.id,
       name: brand.name,
       domain: brand.domain,
       industry: brand.industry,
+      scanFrequency: brand.scanFrequency,
     },
     hasScan: latestRun !== null,
     latestScanStatus: latestRun ? ScanStatus.DONE : null,
     overallScore: 0,
+    trendDelta,
     engineCards: [],
     shareOfVoice: [],
     trend,
     prompts: [],
     sentiment: { positive: 0, neutral: 0, negative: 0 },
+    competitors: competitorNames,
   };
 
   if (!latestRun) return base;
+
+  // Results for the latest run drive the prompts table, SoV, sentiment, and
+  // the per-engine average rank.
+  const results = await db.result.findMany({
+    where: { scanRunId: latestRun.id },
+    include: {
+      prompt: {
+        select: { text: true, category: true, volume: true, tags: true },
+      },
+    },
+  });
+
+  // Per-engine average rank (across results where the brand was named).
+  const rankByEngine = new Map<Engine, number[]>();
+  for (const r of results) {
+    if (typeof r.rank === "number") {
+      const arr = rankByEngine.get(r.engine) ?? [];
+      arr.push(r.rank);
+      rankByEngine.set(r.engine, arr);
+    }
+  }
+  const avgRankFor = (engine: Engine): number | null => {
+    const arr = rankByEngine.get(engine);
+    if (!arr || arr.length === 0) return null;
+    return Math.round((arr.reduce((s, n) => s + n, 0) / arr.length) * 10) / 10;
+  };
 
   // Engine cards from the latest run's visibility scores, in fixed order.
   const scoreByEngine = new Map(
@@ -108,6 +163,7 @@ export async function getBrandDashboard(
         score: v.score,
         shareOfVoice: v.shareOfVoice,
         citationRate: v.citationRate,
+        avgRank: avgRankFor(engine),
       };
     },
   );
@@ -121,14 +177,7 @@ export async function getBrandDashboard(
         ) / 10
       : 0;
 
-  // Results for the latest run drive the prompts table, SoV, and sentiment.
-  const results = await db.result.findMany({
-    where: { scanRunId: latestRun.id },
-    include: { prompt: { select: { text: true, category: true } } },
-  });
-
   // Share of voice: count brand mentions vs each competitor across results.
-  const competitorNames = brand.competitors.map((c) => c.name);
   let brandMentions = 0;
   const competitorCounts = new Map<string, number>(
     competitorNames.map((n) => [n, 0]),
@@ -158,17 +207,25 @@ export async function getBrandDashboard(
       row = {
         promptText: r.prompt.text,
         category: r.prompt.category,
+        volume: r.prompt.volume,
+        tags: r.prompt.tags,
         mentions: {},
+        bestRank: null,
         details: [],
       };
       promptMap.set(key, row);
     }
     row.mentions[r.engine] = r.brandMentioned;
+    if (typeof r.rank === "number") {
+      row.bestRank =
+        row.bestRank === null ? r.rank : Math.min(row.bestRank, r.rank);
+    }
     row.details.push({
       engine: r.engine,
       responseText: r.responseText,
       citedSources: r.citedSources,
       sentiment: r.sentiment,
+      rank: r.rank,
     });
   }
 

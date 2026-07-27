@@ -9,6 +9,8 @@ import {
   ChevronDown,
   ExternalLink,
   ListChecks,
+  TrendingUp,
+  TrendingDown,
 } from "lucide-react";
 import {
   BarChart,
@@ -36,6 +38,9 @@ import {
   type EngineName,
 } from "@/lib/scan/serialize";
 import type { BrandDashboard } from "@/lib/dashboard";
+import { SourcesPanel } from "@/components/sources-panel";
+import { SuggestionsPanel } from "@/components/suggestions-panel";
+import { EditBrandDialog } from "@/components/edit-brand-dialog";
 
 const SENTIMENT_COLORS = {
   positive: "var(--chart-2)",
@@ -121,6 +126,17 @@ export function BrandDashboardView({ data }: { data: BrandDashboard }) {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <EditBrandDialog
+            brandId={data.brand.id}
+            initial={{
+              name: data.brand.name,
+              domain: data.brand.domain,
+              industry: data.brand.industry,
+              competitors: data.competitors,
+              scanFrequency: data.brand.scanFrequency as
+                "OFF" | "WEEKLY" | "DAILY",
+            }}
+          />
           {data.hasScan ? (
             <Button asChild variant="outline">
               <Link href={`/brands/${data.brand.id}/actions`}>
@@ -158,6 +174,10 @@ export function BrandDashboardView({ data }: { data: BrandDashboard }) {
             <PromptsTable data={data} />
             <SentimentChart data={data} />
           </div>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <SourcesPanel brandId={data.brand.id} />
+            <SuggestionsPanel brandId={data.brand.id} />
+          </div>
         </>
       )}
     </div>
@@ -176,11 +196,28 @@ function EmptyState({ scanning }: { scanning: boolean }) {
   );
 }
 
-function ScoreGauge({ score }: { score: number }) {
+function ScoreGauge({ score, delta }: { score: number; delta: number | null }) {
   return (
     <div className="flex flex-col items-center justify-center gap-1">
       <div className="text-5xl font-semibold tabular-nums">{score}</div>
       <div className="text-muted-foreground text-xs">out of 100</div>
+      {delta !== null && delta !== 0 ? (
+        <span
+          className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+            delta > 0
+              ? "bg-[var(--chart-2)]/15 text-[var(--chart-2)]"
+              : "bg-[var(--chart-5)]/15 text-[var(--chart-5)]"
+          }`}
+        >
+          {delta > 0 ? (
+            <TrendingUp className="size-3" />
+          ) : (
+            <TrendingDown className="size-3" />
+          )}
+          {delta > 0 ? "+" : ""}
+          {delta} vs last scan
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -195,7 +232,7 @@ function OverviewRow({ data }: { data: BrandDashboard }) {
           </CardTitle>
         </CardHeader>
         <CardContent className="py-6">
-          <ScoreGauge score={data.overallScore} />
+          <ScoreGauge score={data.overallScore} delta={data.trendDelta} />
         </CardContent>
       </Card>
 
@@ -220,6 +257,7 @@ function OverviewRow({ data }: { data: BrandDashboard }) {
               <p className="text-muted-foreground text-xs">
                 SoV {Math.round(card.shareOfVoice * 100)}% · Cited{" "}
                 {card.citationRate}%
+                {card.avgRank !== null ? ` · Rank ${card.avgRank}` : ""}
               </p>
             </CardContent>
           </Card>
@@ -427,9 +465,26 @@ function PromptRowItem({ row }: { row: BrandDashboard["prompts"][number] }) {
       >
         <span className="min-w-0 flex-1">
           <span className="line-clamp-1 text-sm">{row.promptText}</span>
-          <Badge variant="outline" className="mt-1 text-[10px]">
-            {row.category}
-          </Badge>
+          <span className="mt-1 flex flex-wrap items-center gap-1">
+            <Badge variant="outline" className="text-[10px]">
+              {row.category}
+            </Badge>
+            {row.volume !== null ? (
+              <Badge variant="secondary" className="text-[10px]">
+                ~{row.volume.toLocaleString()}/mo
+              </Badge>
+            ) : null}
+            {row.bestRank !== null ? (
+              <Badge variant="secondary" className="text-[10px]">
+                Rank {row.bestRank}
+              </Badge>
+            ) : null}
+            {row.tags.map((t) => (
+              <Badge key={t} variant="outline" className="text-[10px]">
+                {t}
+              </Badge>
+            ))}
+          </span>
         </span>
         <span className="flex items-center gap-2">
           {ENGINE_ORDER.map((e) => {
@@ -471,6 +526,11 @@ function PromptRowItem({ row }: { row: BrandDashboard["prompts"][number] }) {
                   style={{ background: ENGINE_COLOR_VAR[d.engine] }}
                 />
                 {ENGINE_LABELS[d.engine]}
+                {d.rank !== null ? (
+                  <span className="text-muted-foreground font-normal">
+                    · ranked #{d.rank}
+                  </span>
+                ) : null}
               </div>
               <p className="text-muted-foreground line-clamp-4 text-xs whitespace-pre-wrap">
                 {d.responseText || "(empty response)"}
