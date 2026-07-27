@@ -12,6 +12,9 @@ export {
   PromptSource,
   ScanFrequency,
   AlertType,
+  FameTaskKind,
+  FameTaskStatus,
+  IntegrationProvider,
 } from "@/generated/prisma/client";
 
 export type {
@@ -26,4 +29,6 @@ export type {
   Subscription,
   PromptSuggestion,
   Alert,
+  FameTask,
+  Integration,
 } from "@/generated/prisma/client";

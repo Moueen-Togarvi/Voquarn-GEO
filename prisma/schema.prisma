@@ -73,6 +73,26 @@ enum AlertType {
   SCAN_FAILED
 }
 
+enum FameTaskKind {
+  PUBLISH_CONTENT // publish a generated article/FAQ/snippet to the brand's site
+  ADD_SCHEMA // add JSON-LD schema to the site
+  UPDATE_LLMS_TXT // publish/refresh llms.txt
+  SUBMIT_INDEXNOW // ping IndexNow so Bing/ChatGPT re-crawl
+  GET_MENTION // arrange an off-site mention (human-driven)
+}
+
+enum FameTaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum IntegrationProvider {
+  WORDPRESS
+  WEBFLOW
+  GENERIC_WEBHOOK
+}
+
 // ─────────────────────────────────────────────────────────────
 // Models
 // ─────────────────────────────────────────────────────────────
@@ -128,6 +148,8 @@ model Brand {
   gaps              Gap[]
   promptSuggestions PromptSuggestion[]
   alerts            Alert[]
+  fameTasks         FameTask[]
+  integrations      Integration[]
 
   @@index([userId])
 }
@@ -267,6 +289,45 @@ model Gap {
   recommendedAction  String
   addressed          Boolean  @default(false)
   createdAt          DateTime @default(now())
+
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId])
+}
+
+/// One step in a brand's "Fame Plan" — the ordered checklist that actually
+/// improves AI visibility (publish content, add schema, submit IndexNow, etc.).
+model FameTask {
+  id           String         @id @default(cuid())
+  kind         FameTaskKind
+  title        String
+  detail       String
+  status       FameTaskStatus @default(TODO)
+  /// Arbitrary task payload (e.g. generated content, target competitor, URLs).
+  payload      Json?
+  /// The published URL once a PUBLISH_CONTENT task completes.
+  publishedUrl String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId])
+}
+
+/// A connected publishing destination (WordPress site, Webflow CMS, or a
+/// generic webhook) the platform can publish generated content to.
+model Integration {
+  id          String              @id @default(cuid())
+  provider    IntegrationProvider
+  siteUrl     String?
+  /// Provider credentials (API token / app password / webhook secret).
+  /// Stored as JSON; treat as sensitive.
+  credentials Json
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
 
   brandId String
   brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
