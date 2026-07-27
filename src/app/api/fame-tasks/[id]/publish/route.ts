@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { FameTaskKind, FameTaskStatus } from "@/lib/types";
+import { canGenerateContent } from "@/lib/billing/enforce";
 import { makePublisher } from "@/lib/publish";
 import {
   generateComparisonArticle,
@@ -48,6 +49,16 @@ export async function POST(
   if (task.brand.userId !== user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  // Tier gate: publishing is a Pro+ (content) feature.
+  const allowed = await canGenerateContent(user.id);
+  if (!allowed.ok) {
+    return NextResponse.json(
+      { error: allowed.reason, upgrade: true },
+      { status: 402 },
+    );
+  }
+
   if (task.kind !== FameTaskKind.PUBLISH_CONTENT) {
     return NextResponse.json(
       { error: "This task is not a content-publish task" },

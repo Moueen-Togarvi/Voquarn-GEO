@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireBrandOwnership } from "@/lib/auth";
+import { canGenerateContent } from "@/lib/billing/enforce";
 import {
   generateComparisonArticle,
   generateFAQ,
@@ -33,6 +34,15 @@ export async function POST(
     return NextResponse.json(
       { error: "Not authorized for this brand" },
       { status: access.status },
+    );
+  }
+
+  // Tier gate: content generation is Pro+.
+  const allowed = await canGenerateContent(access.userId);
+  if (!allowed.ok) {
+    return NextResponse.json(
+      { error: allowed.reason, upgrade: true },
+      { status: 402 },
     );
   }
 

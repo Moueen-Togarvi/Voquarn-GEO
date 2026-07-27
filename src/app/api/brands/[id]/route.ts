@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { ScanFrequency } from "@/lib/types";
 import { requireBrandOwnership } from "@/lib/auth";
+import { canUseScanFrequency } from "@/lib/billing/enforce";
 import { brandInputSchema } from "@/lib/validation/brand";
 
 // Edit accepts any subset of the brand fields, plus scanFrequency. When
@@ -34,6 +35,20 @@ export async function PATCH(
     );
   }
   const input = parsed.data;
+
+  // Tier gate: DAILY scheduled scans are Pro+.
+  if (input.scanFrequency) {
+    const allowed = await canUseScanFrequency(
+      access.userId,
+      input.scanFrequency,
+    );
+    if (!allowed.ok) {
+      return NextResponse.json(
+        { error: allowed.reason, upgrade: true },
+        { status: 402 },
+      );
+    }
+  }
 
   await db.brand.update({
     where: { id },

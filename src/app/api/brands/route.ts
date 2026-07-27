@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { brandInputSchema } from "@/lib/validation/brand";
 import { generatePrompts } from "@/lib/prompts/generator";
+import { canCreateBrand } from "@/lib/billing/enforce";
 
 /** GET /api/brands — list the signed-in user's brands with their latest score. */
 export async function GET() {
@@ -56,6 +57,15 @@ export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Tier limit: brand count.
+  const allowed = await canCreateBrand(user.id);
+  if (!allowed.ok) {
+    return NextResponse.json(
+      { error: allowed.reason, upgrade: true },
+      { status: 402 },
+    );
   }
 
   const parsed = brandInputSchema.safeParse(await req.json().catch(() => null));
