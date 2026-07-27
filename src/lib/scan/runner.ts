@@ -4,6 +4,7 @@ import { engines } from "@/lib/engines";
 import {
   detectBrandMention,
   detectCompetitorMentions,
+  detectRank,
   extractSentiment,
   domainCited,
 } from "@/lib/analysis/parser";
@@ -96,6 +97,7 @@ export async function runScan(
           response.text,
           competitorNames,
         );
+        const rank = detectRank(response.text, brand.name, competitorNames);
         const cited = domainCited(response.sources, brand.domain);
         const sentiment = mentioned
           ? await extractSentiment(response.text, brand.name)
@@ -109,6 +111,7 @@ export async function runScan(
             responseText: response.text,
             brandMentioned: mentioned,
             position,
+            rank,
             sentiment,
             citedSources: response.sources,
           },
@@ -119,6 +122,7 @@ export async function runScan(
           brandMentioned: mentioned,
           competitorMentionCount: competitorMentions.length,
           domainCited: cited,
+          rank,
         });
       },
     );
