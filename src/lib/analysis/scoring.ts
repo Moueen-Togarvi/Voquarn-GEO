@@ -11,6 +11,8 @@ export interface ScoreableResult {
   competitorMentionCount: number;
   /** Whether the brand's own domain was cited in this response's sources. */
   domainCited: boolean;
+  /** Ordinal rank of the brand in the answer (1 = named first), or null. */
+  rank?: number | null;
 }
 
 /** Aggregated visibility metrics for one engine over one scan run. */
@@ -22,6 +24,8 @@ export interface EngineVisibility {
   shareOfVoice: number;
   /** % of prompts where the brand's domain was cited in sources (0-100). */
   citationRate: number;
+  /** Average ordinal rank across prompts where the brand was named, or null. */
+  avgRank: number | null;
   /** Number of results (prompts) that fed this engine's score. */
   sampleSize: number;
 }
@@ -45,6 +49,7 @@ export function calculateEngineVisibility(
       score: 0,
       shareOfVoice: 0,
       citationRate: 0,
+      avgRank: null,
       sampleSize: 0,
     };
   }
@@ -58,12 +63,22 @@ export function calculateEngineVisibility(
 
   const totalMentions = brandMentions + competitorMentions;
 
+  // Average rank across the results where the brand was actually named.
+  const ranks = results
+    .map((r) => r.rank)
+    .filter((r): r is number => typeof r === "number");
+  const avgRank =
+    ranks.length > 0
+      ? round(ranks.reduce((s, r) => s + r, 0) / ranks.length, 1)
+      : null;
+
   return {
     engine,
     score: round((brandMentions / sampleSize) * 100),
     shareOfVoice:
       totalMentions === 0 ? 0 : round(brandMentions / totalMentions),
     citationRate: round((domainCitations / sampleSize) * 100),
+    avgRank,
     sampleSize,
   };
 }

@@ -150,3 +150,124 @@ export function fallbackPrompts(brand: BrandContext): GeneratedPrompt[] {
 }
 
 export { CATEGORIES };
+
+/**
+ * Suggest likely competitor brand names for a brand, from its industry +
+ * description. Used by the onboarding wizard to pre-fill competitors. Returns
+ * [] on failure (non-critical).
+ */
+export async function suggestCompetitors(brand: {
+  name: string;
+  industry: string;
+  description?: string | null;
+}): Promise<string[]> {
+  try {
+    const raw = await completeText({
+      model: FAST_MODEL,
+      maxTokens: 300,
+      system:
+        "You name real, well-known competitor brands for a given product. " +
+        "Return ONLY a JSON array of 4-6 competitor names (strings). No prose.",
+      prompt: [
+        `Brand: ${brand.name}`,
+        `Industry: ${brand.industry}`,
+        brand.description ? `Description: ${brand.description}` : "",
+        "",
+        "List its main competitors (exclude the brand itself).",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    });
+    const parsed = extractJson<unknown>(raw);
+    const result = z.array(z.string().trim().min(1)).safeParse(parsed);
+    if (!result.success) return [];
+    return result.data
+      .filter((c) => c.toLowerCase() !== brand.name.toLowerCase())
+      .slice(0, 6);
+  } catch {
+    return [];
+  }
+}
+
+// ── AI-suggested prompts (analyzer inbox) ──
+
+export interface SuggestedPrompt {
+  text: string;
+  category: PromptCategory;
+  /** Rough estimated monthly search volume (derived from a high/med/low bucket). */
+  volume: number;
+  /** Why this prompt matters for the brand's AI visibility. */
+  reason: string;
+}
+
+const VOLUME_BY_BUCKET: Record<"high" | "medium" | "low", number> = {
+  high: 5000,
+  medium: 1000,
+  low: 200,
+};
+
+const suggestionSchema = z.object({
+  text: z.string().min(3),
+  category: z.enum(["discovery", "comparison", "evaluation", "recommendation"]),
+  bucket: z.enum(["high", "medium", "low"]),
+  reason: z.string().min(3),
+});
+const suggestionsSchema = z.array(suggestionSchema);
+
+/**
+ * Propose NEW high-intent prompts the brand isn't tracking yet, each with a
+ * rough volume bucket and a reason. Used for the analyzer's suggestions inbox.
+ * Returns [] on failure (non-critical feature).
+ */
+export async function suggestPrompts(
+  brand: BrandContext,
+  existing: string[] = [],
+): Promise<SuggestedPrompt[]> {
+  try {
+    const raw = await completeText({
+      model: FAST_MODEL,
+      maxTokens: 1500,
+      system: [
+        "You suggest NEW buyer-intent prompts a brand should track for AI",
+        "visibility, beyond the ones it already tracks. For each, estimate a",
+        'search-volume bucket ("high" | "medium" | "low") and give a one-line',
+        "reason. Return ONLY a JSON array of objects with keys text, category",
+        "(discovery|comparison|evaluation|recommendation), bucket, reason.",
+        "No markdown, no prose.",
+      ].join("\n"),
+      prompt: [
+        `Brand: ${brand.name} (${brand.industry})`,
+        brand.description ? `Description: ${brand.description}` : "",
+        `Competitors: ${brand.competitors.join(", ") || "(none)"}`,
+        existing.length > 0
+          ? `Already tracking (do NOT repeat these):\n- ${existing.slice(0, 30).join("\n- ")}`
+          : "",
+        "",
+        "Suggest 6-10 fresh prompts.",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    });
+
+    const parsed = extractJson<unknown>(raw);
+    const result = suggestionsSchema.safeParse(parsed);
+    if (!result.success) return [];
+
+    // Drop any that collide with existing prompts (case-insensitive).
+    const existingLower = new Set(existing.map((e) => e.toLowerCase().trim()));
+    return result.data
+      .filter((s) => !existingLower.has(s.text.toLowerCase().trim()))
+      .map((s) => ({
+        text: s.text,
+        category: s.category,
+        volume: VOLUME_BY_BUCKET[s.bucket],
+        reason: s.reason,
+      }));
+  } catch (error) {
+    console.warn(
+      "[generator] suggestPrompts failed:",
+      error instanceof Error ? error.message : error,
+    );
+    return [];
+  }
+}

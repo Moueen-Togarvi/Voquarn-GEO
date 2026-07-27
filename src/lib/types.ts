@@ -9,6 +9,12 @@ export {
   Severity,
   Tier,
   SubscriptionStatus,
+  PromptSource,
+  ScanFrequency,
+  AlertType,
+  FameTaskKind,
+  FameTaskStatus,
+  IntegrationProvider,
 } from "@/generated/prisma/client";
 
 export type {
@@ -21,4 +27,8 @@ export type {
   VisibilityScore,
   Gap,
   Subscription,
+  PromptSuggestion,
+  Alert,
+  FameTask,
+  Integration,
 } from "@/generated/prisma/client";

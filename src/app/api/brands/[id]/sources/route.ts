@@ -5,6 +5,7 @@ import {
   mapSources,
   generateOutreachList,
 } from "@/lib/execution/source-mapping";
+import { analyzeSourceInfluence } from "@/lib/execution/source-influence";
 
 export const maxDuration = 120;
 
@@ -37,10 +38,13 @@ export async function GET(
 
   const sources = await mapSources(id);
   const outreach = await generateOutreachList(brand.name, sources);
+  // Domains the AI answers themselves referenced (works without citation APIs).
+  const influence = await analyzeSourceInfluence(id);
 
   return NextResponse.json({
     sources,
     outreach,
+    influence,
     serperConfigured: process.env.SERPER_API_KEY !== undefined,
   });
 }

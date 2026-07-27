@@ -54,6 +54,32 @@ export function detectCompetitorMentions(
 }
 
 /**
+ * Ordinal rank of `brandName` among all brands named in `text` (the brand plus
+ * its competitors), ordered by first-mention position. 1 = named first. Returns
+ * null when the brand is not mentioned. This is a stronger visibility signal
+ * than a raw character index: "are we named before our competitors?".
+ */
+export function detectRank(
+  text: string,
+  brandName: string,
+  competitors: string[],
+): number | null {
+  const brand = detectBrandMention(text, brandName);
+  if (!brand.mentioned || brand.position === null) return null;
+
+  // Collect every named entity's first-mention position.
+  const positions: number[] = [brand.position];
+  for (const c of competitors) {
+    const m = detectBrandMention(text, c);
+    if (m.mentioned && m.position !== null) positions.push(m.position);
+  }
+
+  positions.sort((a, b) => a - b);
+  // rank = 1 + how many entities are named before the brand.
+  return positions.indexOf(brand.position) + 1;
+}
+
+/**
  * Classify sentiment toward `brandName` in `text` via a quick Claude call.
  * Only call this when the brand is actually mentioned. Defaults to NEUTRAL on
  * any failure so a scan never breaks on sentiment.

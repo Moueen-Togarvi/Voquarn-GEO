@@ -55,6 +55,44 @@ enum SubscriptionStatus {
   CANCELED
 }
 
+enum PromptSource {
+  GENERATED // created by the prompt generator when a brand is added
+  AI_SUGGESTED // proposed later as an AI suggestion, accepted by the user
+  USER // added manually by the user
+}
+
+enum ScanFrequency {
+  OFF
+  WEEKLY
+  DAILY
+}
+
+enum AlertType {
+  VISIBILITY_DROP
+  SCAN_COMPLETE
+  SCAN_FAILED
+}
+
+enum FameTaskKind {
+  PUBLISH_CONTENT // publish a generated article/FAQ/snippet to the brand's site
+  ADD_SCHEMA // add JSON-LD schema to the site
+  UPDATE_LLMS_TXT // publish/refresh llms.txt
+  SUBMIT_INDEXNOW // ping IndexNow so Bing/ChatGPT re-crawl
+  GET_MENTION // arrange an off-site mention (human-driven)
+}
+
+enum FameTaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum IntegrationProvider {
+  WORDPRESS
+  WEBFLOW
+  GENERIC_WEBHOOK
+}
+
 // ─────────────────────────────────────────────────────────────
 // Models
 // ─────────────────────────────────────────────────────────────
@@ -90,22 +128,28 @@ model Subscription {
 
 /// A brand the user is monitoring across AI engines.
 model Brand {
-  id          String   @id @default(cuid())
-  name        String
-  domain      String
-  industry    String
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String        @id @default(cuid())
+  name            String
+  domain          String
+  industry        String
+  description     String?
+  scanFrequency   ScanFrequency @default(OFF)
+  lastScheduledAt DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  competitors      Competitor[]
-  prompts          Prompt[]
-  scanRuns         ScanRun[]
-  visibilityScores VisibilityScore[]
-  gaps             Gap[]
+  competitors       Competitor[]
+  prompts           Prompt[]
+  scanRuns          ScanRun[]
+  visibilityScores  VisibilityScore[]
+  gaps              Gap[]
+  promptSuggestions PromptSuggestion[]
+  alerts            Alert[]
+  fameTasks         FameTask[]
+  integrations      Integration[]
 
   @@index([userId])
 }
@@ -124,10 +168,14 @@ model Competitor {
 
 /// A realistic buyer-intent query we run through the engines for a brand.
 model Prompt {
-  id        String   @id @default(cuid())
+  id        String       @id @default(cuid())
   text      String
   category  String
-  createdAt DateTime @default(now())
+  /// Rough estimated monthly search volume (Claude-bucketed; null if unknown).
+  volume    Int?
+  tags      String[]
+  source    PromptSource @default(GENERATED)
+  createdAt DateTime     @default(now())
 
   brandId String
   brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
@@ -135,6 +183,38 @@ model Prompt {
   results Result[]
 
   @@index([brandId])
+}
+
+/// An AI-suggested prompt awaiting the user's accept/dismiss decision. When
+/// accepted it becomes a Prompt (source = AI_SUGGESTED).
+model PromptSuggestion {
+  id        String   @id @default(cuid())
+  text      String
+  category  String
+  volume    Int?
+  reason    String
+  accepted  Boolean  @default(false)
+  dismissed Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId])
+}
+
+/// A notification for a brand (visibility drop, scan complete/failed).
+model Alert {
+  id        String    @id @default(cuid())
+  type      AlertType
+  message   String
+  read      Boolean   @default(false)
+  createdAt DateTime  @default(now())
+
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId, read])
 }
 
 /// One execution of all prompts across all engines for a brand.
@@ -160,6 +240,9 @@ model Result {
   responseText   String
   brandMentioned Boolean    @default(false)
   position       Int?
+  /// Ordinal rank of the brand among all brands named in the answer
+  /// (1 = named first). Null when the brand is not mentioned.
+  rank           Int?
   sentiment      Sentiment?
   citedSources   String[]
   createdAt      DateTime   @default(now())
@@ -206,6 +289,45 @@ model Gap {
   recommendedAction  String
   addressed          Boolean  @default(false)
   createdAt          DateTime @default(now())
+
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId])
+}
+
+/// One step in a brand's "Fame Plan" — the ordered checklist that actually
+/// improves AI visibility (publish content, add schema, submit IndexNow, etc.).
+model FameTask {
+  id           String         @id @default(cuid())
+  kind         FameTaskKind
+  title        String
+  detail       String
+  status       FameTaskStatus @default(TODO)
+  /// Arbitrary task payload (e.g. generated content, target competitor, URLs).
+  payload      Json?
+  /// The published URL once a PUBLISH_CONTENT task completes.
+  publishedUrl String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId])
+}
+
+/// A connected publishing destination (WordPress site, Webflow CMS, or a
+/// generic webhook) the platform can publish generated content to.
+model Integration {
+  id          String              @id @default(cuid())
+  provider    IntegrationProvider
+  siteUrl     String?
+  /// Provider credentials (API token / app password / webhook secret).
+  /// Stored as JSON; treat as sensitive.
+  credentials Json
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
 
   brandId String
   brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
