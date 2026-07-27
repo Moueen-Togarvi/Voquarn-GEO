@@ -11,6 +11,7 @@ import {
   ListChecks,
   TrendingUp,
   TrendingDown,
+  Rocket,
 } from "lucide-react";
 import {
   BarChart,
@@ -138,12 +139,20 @@ export function BrandDashboardView({ data }: { data: BrandDashboard }) {
             }}
           />
           {data.hasScan ? (
-            <Button asChild variant="outline">
-              <Link href={`/brands/${data.brand.id}/actions`}>
-                <ListChecks className="size-4" />
-                Action Center
-              </Link>
-            </Button>
+            <>
+              <Button asChild variant="outline">
+                <Link href={`/brands/${data.brand.id}/actions`}>
+                  <ListChecks className="size-4" />
+                  Actions
+                </Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href={`/brands/${data.brand.id}/fame`}>
+                  <Rocket className="size-4" />
+                  Fame Plan
+                </Link>
+              </Button>
+            </>
           ) : null}
           <Button onClick={runScan} disabled={scanning}>
             {scanning ? (

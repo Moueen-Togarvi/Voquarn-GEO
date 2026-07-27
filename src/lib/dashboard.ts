@@ -241,3 +241,71 @@ export async function getBrandDashboard(
 
   return base;
 }
+
+export interface ScanComparison {
+  hasComparison: boolean;
+  before: { date: string; score: number; mentions: number } | null;
+  after: { date: string; score: number; mentions: number } | null;
+  scoreDelta: number;
+  mentionsDelta: number;
+}
+
+/**
+ * Compare a brand's two most recent completed scans to prove Fame-plan impact
+ * (before → after visibility & mention change).
+ */
+export async function compareScans(
+  brandId: string,
+  userId: string,
+): Promise<ScanComparison | null> {
+  const brand = await db.brand.findUnique({
+    where: { id: brandId },
+    select: { userId: true },
+  });
+  if (!brand || brand.userId !== userId) return null;
+
+  const runs = await db.scanRun.findMany({
+    where: { brandId, status: ScanStatus.DONE },
+    orderBy: { startedAt: "desc" },
+    take: 2,
+    include: {
+      visibilityScores: true,
+      _count: { select: { results: { where: { brandMentioned: true } } } },
+    },
+  });
+
+  const summarize = (run: (typeof runs)[number]) => {
+    const scores = run.visibilityScores;
+    const score =
+      scores.length > 0
+        ? Math.round(
+            (scores.reduce((s, v) => s + v.score, 0) / scores.length) * 10,
+          ) / 10
+        : 0;
+    return {
+      date: run.startedAt.toISOString().slice(0, 10),
+      score,
+      mentions: run._count.results,
+    };
+  };
+
+  if (runs.length < 2) {
+    return {
+      hasComparison: false,
+      before: null,
+      after: runs[0] ? summarize(runs[0]) : null,
+      scoreDelta: 0,
+      mentionsDelta: 0,
+    };
+  }
+
+  const after = summarize(runs[0]);
+  const before = summarize(runs[1]);
+  return {
+    hasComparison: true,
+    before,
+    after,
+    scoreDelta: Math.round((after.score - before.score) * 10) / 10,
+    mentionsDelta: after.mentions - before.mentions,
+  };
+}
