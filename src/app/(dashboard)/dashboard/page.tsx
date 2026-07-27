@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { currentUser } from "@clerk/nextjs/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getUserBrands } from "@/lib/queries";
@@ -15,6 +16,9 @@ export default async function DashboardPage() {
 
   const user = await getCurrentUser();
   const brands = user ? await getUserBrands(user.id) : [];
+
+  // First-run: no brands yet → send the user through onboarding.
+  if (user && brands.length === 0) redirect("/onboarding");
   const openActions = user
     ? await db.gap.count({
         where: { addressed: false, brand: { userId: user.id } },

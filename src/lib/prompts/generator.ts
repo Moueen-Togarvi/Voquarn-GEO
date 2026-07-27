@@ -151,6 +151,44 @@ export function fallbackPrompts(brand: BrandContext): GeneratedPrompt[] {
 
 export { CATEGORIES };
 
+/**
+ * Suggest likely competitor brand names for a brand, from its industry +
+ * description. Used by the onboarding wizard to pre-fill competitors. Returns
+ * [] on failure (non-critical).
+ */
+export async function suggestCompetitors(brand: {
+  name: string;
+  industry: string;
+  description?: string | null;
+}): Promise<string[]> {
+  try {
+    const raw = await completeText({
+      model: FAST_MODEL,
+      maxTokens: 300,
+      system:
+        "You name real, well-known competitor brands for a given product. " +
+        "Return ONLY a JSON array of 4-6 competitor names (strings). No prose.",
+      prompt: [
+        `Brand: ${brand.name}`,
+        `Industry: ${brand.industry}`,
+        brand.description ? `Description: ${brand.description}` : "",
+        "",
+        "List its main competitors (exclude the brand itself).",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    });
+    const parsed = extractJson<unknown>(raw);
+    const result = z.array(z.string().trim().min(1)).safeParse(parsed);
+    if (!result.success) return [];
+    return result.data
+      .filter((c) => c.toLowerCase() !== brand.name.toLowerCase())
+      .slice(0, 6);
+  } catch {
+    return [];
+  }
+}
+
 // ── AI-suggested prompts (analyzer inbox) ──
 
 export interface SuggestedPrompt {
