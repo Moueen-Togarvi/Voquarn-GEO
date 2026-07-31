@@ -1,0 +1,185 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PromptType {
+  CATEGORY
+  COMPARISON
+  USE_CASE
+  BRAND_SPECIFIC
+}
+
+enum BatchStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  PARTIAL_FAILURE
+  FAILED
+  CANCELLED
+}
+
+enum RunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum Sentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  brands Brand[]
+}
+
+model Brand {
+  id          String   @id @default(cuid())
+  name        String
+  websiteUrl  String
+  domain      String
+  description String
+  category    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  competitors Competitor[]
+  prompts     Prompt[]
+  batches     AnalysisBatch[]
+
+  @@unique([workspaceId, domain])
+  @@index([workspaceId, updatedAt])
+}
+
+model Competitor {
+  id         String   @id @default(cuid())
+  name       String
+  websiteUrl String
+  domain     String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@unique([brandId, domain])
+  @@index([brandId])
+}
+
+model Prompt {
+  id        String     @id @default(cuid())
+  text      String
+  type      PromptType
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  runs PromptRun[]
+
+  @@unique([brandId, text])
+  @@index([brandId, isActive])
+}
+
+model AnalysisBatch {
+  id             String      @id @default(cuid())
+  status         BatchStatus @default(PENDING)
+  totalRuns      Int         @default(0)
+  completedRuns  Int         @default(0)
+  failedRuns     Int         @default(0)
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  runs PromptRun[]
+
+  @@index([brandId, createdAt])
+  @@index([status])
+}
+
+model PromptRun {
+  id                String    @id @default(cuid())
+  provider          String
+  model             String
+  status            RunStatus @default(PENDING)
+  providerRequestId String?
+  responseText      String?
+  inputTokens       Int?
+  outputTokens      Int?
+  totalTokens       Int?
+  attemptCount      Int       @default(0)
+  errorCode         String?
+  errorMessage      String?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  batchId String
+  batch   AnalysisBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  promptId String
+  prompt   Prompt @relation(fields: [promptId], references: [id], onDelete: Cascade)
+
+  analysis RunAnalysis?
+  sources  Source[]
+
+  @@unique([batchId, promptId, provider, model])
+  @@index([batchId, status])
+  @@index([promptId])
+}
+
+model RunAnalysis {
+  id                 String    @id @default(cuid())
+  brandMentioned     Boolean
+  position           Int?
+  sentiment          Sentiment
+  competitorMentions Json
+  rawResult           Json?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  promptRunId String    @unique
+  promptRun   PromptRun @relation(fields: [promptRunId], references: [id], onDelete: Cascade)
+}
+
+model Source {
+  id            String   @id @default(cuid())
+  url           String
+  domain        String
+  title         String?
+  snippet       String?
+  providerRef   String?
+  citationIndex Int?
+  isCitation    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  promptRunId String    
+  promptRun   PromptRun @relation(fields: [promptRunId], references: [id], onDelete: Cascade)
+
+  @@unique([promptRunId, url])
+  @@index([domain])
+  @@index([promptRunId])
+}

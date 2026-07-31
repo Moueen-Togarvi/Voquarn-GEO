@@ -1,0 +1,18 @@
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { listBrands } from "@/lib/brands/service";
+
+export const dynamic = "force-dynamic";
+
+export default async function HomePage() {
+  const [brands, cookieStore] = await Promise.all([listBrands(), cookies()]);
+
+  if (brands.length === 0) {
+    redirect("/onboarding");
+  }
+
+  const preferredId = cookieStore.get("voquarn_project")?.value;
+  const preferred =
+    brands.find((brand) => brand.id === preferredId) ?? brands[0];
+  redirect(`/projects/${preferred.id}/overview`);
+}
