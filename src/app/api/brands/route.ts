@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { errorResponse } from "@/lib/api/errors";
 import { createBrand, listBrands } from "@/lib/brands/service";
-import { brandInputSchema } from "@/lib/validation/brand";
+import { discoverBrandProfile } from "@/lib/discovery/brand-profile";
+import { brandDiscoveryInputSchema } from "@/lib/validation/brand";
 
 export async function GET() {
   try {
@@ -13,8 +14,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const input = brandInputSchema.parse(await request.json());
-    const brand = await createBrand(input);
+    const input = brandDiscoveryInputSchema.parse(await request.json());
+    const profile = await discoverBrandProfile(input);
+    const brand = await createBrand(profile);
     return NextResponse.json({ data: brand }, { status: 201 });
   } catch (error) {
     return errorResponse(error);

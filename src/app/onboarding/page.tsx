@@ -25,8 +25,8 @@ export default function OnboardingPage() {
         </div>
         <h1>See how AI understands your brand.</h1>
         <p className="onboarding-lead">
-          Add your SaaS product and closest competitors. This becomes the clean
-          data foundation for every visibility analysis.
+          Enter only your company name and website. Voquarn researches your
+          product, category, and closest competitors automatically.
         </p>
         <BrandForm />
       </div>

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  brandDiscoveryInputSchema,
   brandInputSchema,
   domainFromUrl,
   normalizeUrl,
@@ -17,6 +18,18 @@ const validInput = {
 };
 
 describe("brand validation", () => {
+  it("accepts only the two user-supplied discovery fields", () => {
+    const result = brandDiscoveryInputSchema.parse({
+      name: "  Voquarn  ",
+      websiteUrl: "https://WWW.VOQUARN.com/",
+    });
+
+    expect(result).toEqual({
+      name: "Voquarn",
+      websiteUrl: "https://www.voquarn.com",
+    });
+  });
+
   it("normalizes URLs and extracts a lowercase registrable host", () => {
     expect(normalizeUrl(" https://WWW.Example.COM/ ")).toBe(
       "https://www.example.com",

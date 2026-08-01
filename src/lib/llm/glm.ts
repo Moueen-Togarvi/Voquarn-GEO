@@ -9,7 +9,7 @@ import type {
 
 export const ZAI_CHAT_ENDPOINT =
   "https://api.z.ai/api/paas/v4/chat/completions";
-export const DEFAULT_GLM_MODEL = "glm-5.1";
+export const DEFAULT_GLM_MODEL = "glm-5.2";
 
 type GlmRequestOptions = {
   model?: string;
@@ -70,8 +70,11 @@ type GlmApiResponse = {
     refer?: string;
     publish_date?: string;
   }>;
-  code?: number;
+  code?: number | string;
   message?: string;
+  // Z.AI reports failures under `error` (e.g. billing errors arrive as HTTP 429
+  // with code 1113), so surface that instead of the bare status text.
+  error?: { code?: number | string; message?: string };
 };
 
 export class GlmProvider implements LlmProvider {
@@ -101,6 +104,7 @@ export class GlmProvider implements LlmProvider {
         messages: input.messages,
         model: this.model,
         json: true,
+        webSearch: input.webSearch,
         maxTokens: input.maxTokens,
         temperature: input.temperature,
       }),
@@ -130,9 +134,10 @@ export class GlmProvider implements LlmProvider {
 
     const payload = (await response.json()) as GlmApiResponse;
     if (!response.ok) {
-      throw new Error(
-        `Z.AI request failed (${payload.code ?? response.status}): ${payload.message ?? response.statusText}`,
-      );
+      const code = payload.error?.code ?? payload.code ?? response.status;
+      const message =
+        payload.error?.message ?? payload.message ?? response.statusText;
+      throw new Error(`Z.AI request failed (${code}): ${message}`);
     }
 
     const choice = payload.choices?.[0];

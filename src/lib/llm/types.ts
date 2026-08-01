@@ -40,6 +40,7 @@ export type GenerateTextInput = {
 export type GenerateJsonInput<T> = {
   messages: LlmMessage[];
   schema: ZodType<T>;
+  webSearch?: boolean;
   maxTokens?: number;
   temperature?: number;
 };

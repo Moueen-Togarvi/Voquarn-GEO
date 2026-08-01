@@ -10,23 +10,9 @@ test("create, edit, switch to, and delete a project", async ({ page }) => {
   const brandName = `E2E Brand ${suffix}`;
 
   await page.goto("/onboarding");
-  await page.getByLabel("Brand name").fill(brandName);
-  await page.getByLabel("Website").fill(`https://brand-${suffix}.test`);
-  await page
-    .getByLabel("What does your product do?")
-    .fill("A test SaaS used to verify the onboarding flow.");
-  await page
-    .getByLabel("Specific category")
-    .fill("Browser testing software for SaaS teams");
-  await page.getByLabel("Competitor 1 name").fill("Alpha");
-  await page
-    .getByLabel("Competitor 1 website")
-    .fill(`https://alpha-${suffix}.test`);
-  await page.getByLabel("Competitor 2 name").fill("Beta");
-  await page
-    .getByLabel("Competitor 2 website")
-    .fill(`https://beta-${suffix}.test`);
-  await page.getByRole("button", { name: "Create project" }).click();
+  await page.getByLabel("Company name").fill(brandName);
+  await page.getByLabel("Company website").fill(`https://brand-${suffix}.test`);
+  await page.getByRole("button", { name: "Research & create project" }).click();
 
   await expect(page).toHaveURL(/\/projects\/[^/]+\/overview/);
   await expect(
@@ -34,12 +20,13 @@ test("create, edit, switch to, and delete a project", async ({ page }) => {
   ).toBeVisible();
 
   await page.getByRole("link", { name: "Project settings" }).click();
-  await page
-    .getByLabel("Specific category")
-    .fill("Updated browser testing software");
-  await page.getByRole("button", { name: "Save changes" }).click();
   await expect(
-    page.getByRole("button", { name: "Changes saved" }),
+    page.getByRole("heading", { name: "AI-discovered profile" }),
+  ).toBeVisible();
+  await expect(page.getByText("AI search visibility software")).toBeVisible();
+  await page.getByRole("button", { name: "Re-analyze project" }).click();
+  await expect(
+    page.getByRole("button", { name: "Profile updated" }),
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Delete project" }).click();

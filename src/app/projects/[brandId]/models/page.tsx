@@ -43,15 +43,17 @@ export default function ModelsPage() {
         </div>
         <div className="model-side">
           <small>Model ID</small>
-          <code>glm-5.1</code>
+          <code>glm-5.2</code>
         </div>
       </section>
       <div className="provider-note">
-        <strong>No model calls run in this milestone.</strong>
+        <strong>GLM powers automatic company research.</strong>
         <p>
           Add <code>ZAI_API_KEY</code> in the protected deployment environment
-          before enabling prompt generation. OpenAI, Perplexity, and other
-          providers will use the same internal contract later.
+          to discover product context and direct competitors during onboarding.
+          Prompt generation is still reserved for the next milestone. OpenAI,
+          Perplexity, and other providers can use the same internal contract
+          later.
         </p>
       </div>
     </div>

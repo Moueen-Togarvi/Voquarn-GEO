@@ -1,7 +1,34 @@
 import { z } from "zod";
 
+// Users routinely type a bare domain ("example.com"). Treat a missing scheme as
+// https so the URL checks below see something parseable. Anything that already
+// carries a scheme (including non-web ones like mailto:) is left untouched so
+// the protocol check can still reject it.
+export function withProtocol(value: string): string {
+  const trimmed = value.trim();
+
+  if (trimmed === "" || /^[a-z][a-z0-9+.-]*:/i.test(trimmed)) {
+    return trimmed;
+  }
+
+  return `https://${trimmed}`;
+}
+
+function parseUrl(value: string): URL | null {
+  try {
+    return new URL(value.trim());
+  } catch {
+    return null;
+  }
+}
+
 export function normalizeUrl(value: string): string {
-  const url = new URL(value.trim());
+  const url = parseUrl(value);
+
+  if (!url) {
+    return value.trim();
+  }
+
   url.hash = "";
   url.hostname = url.hostname.toLowerCase();
 
@@ -13,19 +40,36 @@ export function normalizeUrl(value: string): string {
 }
 
 export function domainFromUrl(value: string): string {
-  return new URL(value).hostname.toLowerCase().replace(/^www\./, "");
+  return (
+    parseUrl(withProtocol(value))
+      ?.hostname.toLowerCase()
+      .replace(/^www\./, "") ?? ""
+  );
 }
 
 const websiteUrlSchema = z
-  .string()
-  .trim()
-  .min(1, "Website URL is required")
-  .url("Enter a valid website URL")
+  .preprocess(
+    (value) => (typeof value === "string" ? withProtocol(value) : value),
+    z
+      .string()
+      .trim()
+      .min(1, "Website URL is required")
+      .url("Enter a valid website URL"),
+  )
   .refine((value) => {
-    const protocol = new URL(value).protocol;
+    const protocol = parseUrl(value)?.protocol;
     return protocol === "http:" || protocol === "https:";
   }, "Website URL must use http or https")
   .transform(normalizeUrl);
+
+export const brandDiscoveryInputSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(2, "Brand name is required")
+    .max(80, "Keep the brand name under 80 characters"),
+  websiteUrl: websiteUrlSchema,
+});
 
 export const competitorInputSchema = z.object({
   name: z
@@ -103,3 +147,4 @@ export const deleteBrandSchema = z.object({
 });
 
 export type BrandInput = z.infer<typeof brandInputSchema>;
+export type BrandDiscoveryInput = z.infer<typeof brandDiscoveryInputSchema>;

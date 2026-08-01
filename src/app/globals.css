@@ -403,6 +403,134 @@ textarea:focus-visible,
   color: #a52c38;
   line-height: 1.45;
 }
+.brand-research-stack {
+  display: grid;
+  gap: 20px;
+}
+.discovered-profile {
+  display: grid;
+  gap: 24px;
+  padding: 25px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+}
+.profile-facts {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 12px;
+}
+.profile-facts > div {
+  display: grid;
+  gap: 7px;
+  padding: 15px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+.profile-facts span,
+.discovered-competitors > span {
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.profile-facts strong {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.discovered-competitors {
+  display: grid;
+  gap: 10px;
+}
+.discovered-competitors > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+.discovered-competitors a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--muted);
+  transition: 150ms ease;
+}
+.discovered-competitors a:hover {
+  border-color: #c8c4ef;
+  color: var(--violet);
+}
+.discovered-competitors a > span {
+  display: grid;
+  min-width: 0;
+}
+.discovered-competitors strong,
+.discovered-competitors small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.discovered-competitors strong {
+  color: var(--text);
+  font-size: 12px;
+}
+.discovered-competitors small {
+  color: var(--faint);
+  font-size: 10px;
+}
+.automatic-research-note,
+.research-progress {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 13px 14px;
+  border: 1px solid #ddd9fa;
+  border-radius: 10px;
+  background: #f8f7ff;
+  color: var(--violet);
+}
+.automatic-research-note strong,
+.research-progress strong {
+  display: block;
+  color: var(--text);
+  font-size: 12px;
+}
+.automatic-research-note p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.research-progress {
+  align-items: center;
+  margin: -2px 0 2px;
+}
+.research-progress div {
+  display: grid;
+  gap: 2px;
+}
+.research-progress small {
+  color: var(--faint);
+  font-size: 11px;
+}
+.research-spinner {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  border: 2px solid #d9d5fa;
+  border-top-color: var(--violet);
+  border-radius: 999px;
+  animation: research-spin 0.8s linear infinite;
+}
+@keyframes research-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .competitor-list {
   display: grid;
   gap: 11px;
@@ -1100,6 +1228,13 @@ code {
   }
   .two-columns {
     grid-template-columns: 1fr;
+  }
+  .profile-facts,
+  .discovered-competitors > div {
+    grid-template-columns: 1fr;
+  }
+  .discovered-profile {
+    padding: 20px 17px;
   }
   .field-span {
     grid-column: auto;

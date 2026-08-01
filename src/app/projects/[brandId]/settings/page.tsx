@@ -20,7 +20,7 @@ export default async function SettingsPage({
       <PageHeader
         eyebrow="Configuration"
         title="Project settings"
-        description="Keep your brand context and competitive set accurate before running analysis."
+        description="Review the researched company profile or re-run discovery from the official website."
       />
       <BrandForm brand={brand} />
       <section className="danger-zone">

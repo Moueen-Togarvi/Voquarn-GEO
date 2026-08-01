@@ -1,120 +1,65 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
+import { Check, Globe2, Search, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ApiFailure, ApiSuccess, BrandDto } from "@/lib/brands/types";
-import { brandInputSchema } from "@/lib/validation/brand";
+import { brandDiscoveryInputSchema } from "@/lib/validation/brand";
 
-type FormCompetitor = { name: string; websiteUrl: string };
-type FormValue = {
-  name: string;
-  websiteUrl: string;
-  description: string;
-  category: string;
-  competitors: FormCompetitor[];
-};
+type FormValue = { name: string; websiteUrl: string };
 
-const emptyCompetitor = (): FormCompetitor => ({ name: "", websiteUrl: "" });
-
-function initialFormValue(brand?: BrandDto): FormValue {
-  return brand
-    ? {
-        name: brand.name,
-        websiteUrl: brand.websiteUrl,
-        description: brand.description,
-        category: brand.category,
-        competitors: brand.competitors.map(({ name, websiteUrl }) => ({
-          name,
-          websiteUrl,
-        })),
-      }
-    : {
-        name: "",
-        websiteUrl: "",
-        description: "",
-        category: "",
-        competitors: [emptyCompetitor(), emptyCompetitor()],
-      };
-}
+const researchSteps = [
+  "Reading your website…",
+  "Understanding your product and category…",
+  "Finding and verifying direct competitors…",
+];
 
 export function BrandForm({ brand }: { brand?: BrandDto }) {
   const router = useRouter();
-  const [value, setValue] = useState<FormValue>(() => initialFormValue(brand));
+  const [value, setValue] = useState<FormValue>({
+    name: brand?.name ?? "",
+    websiteUrl: brand?.websiteUrl ?? "",
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
-  const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [status, setStatus] = useState<"idle" | "researching" | "saved">(
+    "idle",
+  );
+  const [researchStep, setResearchStep] = useState(0);
   const isEditing = Boolean(brand);
 
-  const descriptionCount = useMemo(
-    () => value.description.length,
-    [value.description],
-  );
+  useEffect(() => {
+    if (status !== "researching") return;
 
-  function updateField(
-    field: keyof Omit<FormValue, "competitors">,
-    fieldValue: string,
-  ) {
+    const interval = window.setInterval(() => {
+      setResearchStep((current) =>
+        Math.min(current + 1, researchSteps.length - 1),
+      );
+    }, 2600);
+    return () => window.clearInterval(interval);
+  }, [status]);
+
+  function updateField(field: keyof FormValue, fieldValue: string) {
     setValue((current) => ({ ...current, [field]: fieldValue }));
     setErrors((current) => ({ ...current, [field]: "" }));
-  }
-
-  function updateCompetitor(
-    index: number,
-    field: keyof FormCompetitor,
-    fieldValue: string,
-  ) {
-    setValue((current) => ({
-      ...current,
-      competitors: current.competitors.map((competitor, competitorIndex) =>
-        competitorIndex === index
-          ? { ...competitor, [field]: fieldValue }
-          : competitor,
-      ),
-    }));
-    setErrors((current) => ({
-      ...current,
-      [`competitors.${index}.${field}`]: "",
-    }));
-  }
-
-  function addCompetitor() {
-    if (value.competitors.length < 4) {
-      setValue((current) => ({
-        ...current,
-        competitors: [...current.competitors, emptyCompetitor()],
-      }));
-    }
-  }
-
-  function removeCompetitor(index: number) {
-    if (value.competitors.length > 2) {
-      setValue((current) => ({
-        ...current,
-        competitors: current.competitors.filter(
-          (_, competitorIndex) => competitorIndex !== index,
-        ),
-      }));
-    }
   }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setServerError(null);
-    setStatus("saving");
 
-    const parsed = brandInputSchema.safeParse(value);
+    const parsed = brandDiscoveryInputSchema.safeParse(value);
     if (!parsed.success) {
       const nextErrors: Record<string, string> = {};
       for (const issue of parsed.error.issues) {
-        const key = issue.path.join(".");
-        nextErrors[key] ??= issue.message;
+        nextErrors[issue.path.join(".")] ??= issue.message;
       }
       setErrors(nextErrors);
-      setStatus("idle");
       return;
     }
 
+    setResearchStep(0);
+    setStatus("researching");
     try {
       const response = await fetch(
         isEditing ? `/api/brands/${brand?.id}` : "/api/brands",
@@ -130,19 +75,24 @@ export function BrandForm({ brand }: { brand?: BrandDto }) {
       if (!response.ok || !("data" in payload)) {
         if ("error" in payload) {
           setServerError(payload.error.message);
-          const apiErrors = Object.fromEntries(
-            Object.entries(payload.error.fieldErrors ?? {}).map(
-              ([key, messages]) => [key, messages?.[0] ?? ""],
+          setErrors((current) => ({
+            ...current,
+            ...Object.fromEntries(
+              Object.entries(payload.error.fieldErrors ?? {}).map(
+                ([key, messages]) => [key, messages?.[0] ?? ""],
+              ),
             ),
-          );
-          setErrors((current) => ({ ...current, ...apiErrors }));
+          }));
         }
         setStatus("idle");
         return;
       }
 
       if (isEditing) {
-        setValue(initialFormValue(payload.data));
+        setValue({
+          name: payload.data.name,
+          websiteUrl: payload.data.websiteUrl,
+        });
         setStatus("saved");
         router.refresh();
         window.setTimeout(() => setStatus("idle"), 2200);
@@ -158,194 +108,154 @@ export function BrandForm({ brand }: { brand?: BrandDto }) {
     }
   }
 
-  const errorFor = (key: string) => errors[key];
-
   return (
-    <form className="brand-form" onSubmit={submit} noValidate>
-      {serverError ? (
-        <div className="form-alert" role="alert">
-          {serverError}
-        </div>
-      ) : null}
-
-      <section className="form-section">
-        <div className="form-section-heading">
-          <span className="step-number">1</span>
-          <div>
-            <h2>Tell us about your product</h2>
-            <p>
-              Use the wording your buyers would use when describing your
-              category.
-            </p>
-          </div>
-        </div>
-
-        <div className="form-grid two-columns">
-          <label className="field">
-            <span>Brand name</span>
-            <input
-              value={value.name}
-              onChange={(event) => updateField("name", event.target.value)}
-              placeholder="Voquarn"
-              aria-invalid={Boolean(errorFor("name"))}
-            />
-            {errorFor("name") ? (
-              <small className="field-error">{errorFor("name")}</small>
-            ) : null}
-          </label>
-          <label className="field">
-            <span>Website</span>
-            <input
-              type="url"
-              value={value.websiteUrl}
-              onChange={(event) =>
-                updateField("websiteUrl", event.target.value)
-              }
-              placeholder="https://voquarn.com"
-              aria-invalid={Boolean(errorFor("websiteUrl"))}
-            />
-            {errorFor("websiteUrl") ? (
-              <small className="field-error">{errorFor("websiteUrl")}</small>
-            ) : null}
-          </label>
-          <label className="field field-span">
-            <span>What does your product do?</span>
-            <textarea
-              value={value.description}
-              onChange={(event) =>
-                updateField("description", event.target.value)
-              }
-              placeholder="An AI visibility platform for SaaS marketing teams."
-              rows={3}
-              maxLength={240}
-              aria-invalid={Boolean(errorFor("description"))}
-            />
-            <span className="field-meta">
-              {errorFor("description") ? (
-                <small className="field-error">{errorFor("description")}</small>
-              ) : (
-                <small>One clear sentence works best.</small>
-              )}
-              <small>{descriptionCount}/240</small>
+    <div className="brand-research-stack">
+      {brand ? (
+        <section className="discovered-profile" aria-labelledby="profile-title">
+          <div className="form-section-heading">
+            <span className="step-number">
+              <Sparkles size={16} />
             </span>
-          </label>
-          <label className="field field-span">
-            <span>Specific category</span>
-            <input
-              value={value.category}
-              onChange={(event) => updateField("category", event.target.value)}
-              placeholder="AI search visibility software for SaaS companies"
-              aria-invalid={Boolean(errorFor("category"))}
-            />
-            {errorFor("category") ? (
-              <small className="field-error">{errorFor("category")}</small>
-            ) : (
-              <small>
-                Be specific—not “software,” but “email API for developers.”
-              </small>
-            )}
-          </label>
-        </div>
-      </section>
-
-      <section className="form-section">
-        <div className="form-section-heading form-section-heading-action">
-          <div className="heading-with-step">
-            <span className="step-number">2</span>
             <div>
-              <h2>Add your closest competitors</h2>
+              <h2 id="profile-title">AI-discovered profile</h2>
               <p>
-                We will compare how AI models mention and position each brand.
+                Voquarn researched the website and verified the competitive
+                context automatically.
               </p>
             </div>
           </div>
-          <span className="count-pill">{value.competitors.length}/4</span>
-        </div>
-
-        <div className="competitor-list">
-          {value.competitors.map((competitor, index) => (
-            <div className="competitor-row" key={index}>
-              <span className="competitor-index">{index + 1}</span>
-              <label className="field">
-                <span className="sr-only">Competitor {index + 1} name</span>
-                <input
-                  value={competitor.name}
-                  onChange={(event) =>
-                    updateCompetitor(index, "name", event.target.value)
-                  }
-                  placeholder="Competitor name"
-                  aria-invalid={Boolean(errorFor(`competitors.${index}.name`))}
-                />
-                {errorFor(`competitors.${index}.name`) ? (
-                  <small className="field-error">
-                    {errorFor(`competitors.${index}.name`)}
-                  </small>
-                ) : null}
-              </label>
-              <label className="field">
-                <span className="sr-only">Competitor {index + 1} website</span>
-                <input
-                  type="url"
-                  value={competitor.websiteUrl}
-                  onChange={(event) =>
-                    updateCompetitor(index, "websiteUrl", event.target.value)
-                  }
-                  placeholder="https://competitor.com"
-                  aria-invalid={Boolean(
-                    errorFor(`competitors.${index}.websiteUrl`),
-                  )}
-                />
-                {errorFor(`competitors.${index}.websiteUrl`) ? (
-                  <small className="field-error">
-                    {errorFor(`competitors.${index}.websiteUrl`)}
-                  </small>
-                ) : null}
-              </label>
-              <button
-                className="icon-button danger-hover"
-                type="button"
-                onClick={() => removeCompetitor(index)}
-                disabled={value.competitors.length <= 2}
-                aria-label={`Remove competitor ${index + 1}`}
-              >
-                <Trash2 size={17} />
-              </button>
-              {errorFor(`competitors.${index}`) ? (
-                <small className="field-error competitor-wide-error">
-                  {errorFor(`competitors.${index}`)}
-                </small>
-              ) : null}
+          <div className="profile-facts">
+            <div>
+              <span>What the product does</span>
+              <strong>{brand.description}</strong>
             </div>
-          ))}
-        </div>
+            <div>
+              <span>Specific category</span>
+              <strong>{brand.category}</strong>
+            </div>
+          </div>
+          <div className="discovered-competitors">
+            <span>Direct competitors</span>
+            <div>
+              {brand.competitors.map((competitor) => (
+                <a
+                  href={competitor.websiteUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  key={competitor.id}
+                >
+                  <Globe2 size={15} />
+                  <span>
+                    <strong>{competitor.name}</strong>
+                    <small>{competitor.domain}</small>
+                  </span>
+                </a>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
 
-        {value.competitors.length < 4 ? (
-          <button
-            className="button button-ghost add-competitor"
-            type="button"
-            onClick={addCompetitor}
-          >
-            <Plus size={16} /> Add another competitor
-          </button>
+      <form className="brand-form" onSubmit={submit} noValidate>
+        {serverError ? (
+          <div className="form-alert" role="alert">
+            {serverError}
+          </div>
         ) : null}
-      </section>
 
-      <div className="form-actions">
-        <p>Your data stays inside your protected workspace.</p>
-        <button
-          className="button button-primary button-large"
-          type="submit"
-          disabled={status === "saving"}
-        >
-          {status === "saving"
-            ? "Saving…"
-            : status === "saved"
-              ? "Changes saved"
-              : isEditing
-                ? "Save changes"
-                : "Create project"}
-        </button>
-      </div>
-    </form>
+        <section className="form-section">
+          <div className="form-section-heading">
+            <span className="step-number">
+              {isEditing ? <Search size={16} /> : "1"}
+            </span>
+            <div>
+              <h2>
+                {isEditing ? "Re-analyze your company" : "Add your company"}
+              </h2>
+              <p>
+                Only the company name and website are needed. AI discovers the
+                product, category, and closest competitors for you.
+              </p>
+            </div>
+          </div>
+
+          <div className="form-grid two-columns">
+            <label className="field">
+              <span>Company name</span>
+              <input
+                value={value.name}
+                onChange={(event) => updateField("name", event.target.value)}
+                placeholder="Voquarn"
+                aria-invalid={Boolean(errors.name)}
+                disabled={status === "researching"}
+              />
+              {errors.name ? (
+                <small className="field-error">{errors.name}</small>
+              ) : null}
+            </label>
+            <label className="field">
+              <span>Company website</span>
+              <input
+                type="url"
+                value={value.websiteUrl}
+                onChange={(event) =>
+                  updateField("websiteUrl", event.target.value)
+                }
+                placeholder="https://voquarn.com"
+                aria-invalid={Boolean(errors.websiteUrl)}
+                disabled={status === "researching"}
+              />
+              {errors.websiteUrl ? (
+                <small className="field-error">{errors.websiteUrl}</small>
+              ) : (
+                <small>Use the official product homepage.</small>
+              )}
+            </label>
+          </div>
+
+          <div className="automatic-research-note">
+            <Sparkles size={18} />
+            <div>
+              <strong>Everything else is automatic</strong>
+              <p>
+                We read the site, identify the specific category, and use web
+                research to verify 2–4 direct competitors.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {status === "researching" ? (
+          <div className="research-progress" role="status" aria-live="polite">
+            <span className="research-spinner" />
+            <div>
+              <strong>{researchSteps[researchStep]}</strong>
+              <small>This can take around 20–60 seconds.</small>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="form-actions">
+          <p>AI-generated details are validated before they are saved.</p>
+          <button
+            className="button button-primary button-large"
+            type="submit"
+            disabled={status === "researching"}
+          >
+            {status === "researching" ? (
+              "Researching…"
+            ) : status === "saved" ? (
+              <>
+                <Check size={16} /> Profile updated
+              </>
+            ) : isEditing ? (
+              "Re-analyze project"
+            ) : (
+              "Research & create project"
+            )}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }

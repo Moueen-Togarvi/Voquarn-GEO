@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { errorResponse, AppError } from "@/lib/api/errors";
 import { deleteBrand, getBrand, updateBrand } from "@/lib/brands/service";
-import { brandInputSchema, deleteBrandSchema } from "@/lib/validation/brand";
+import { discoverBrandProfile } from "@/lib/discovery/brand-profile";
+import {
+  brandDiscoveryInputSchema,
+  deleteBrandSchema,
+} from "@/lib/validation/brand";
 
 type RouteContext = { params: Promise<{ brandId: string }> };
 
@@ -21,8 +25,9 @@ export async function GET(_request: Request, context: RouteContext) {
 export async function PATCH(request: Request, context: RouteContext) {
   try {
     const { brandId } = await context.params;
-    const input = brandInputSchema.parse(await request.json());
-    return NextResponse.json({ data: await updateBrand(brandId, input) });
+    const input = brandDiscoveryInputSchema.parse(await request.json());
+    const profile = await discoverBrandProfile(input);
+    return NextResponse.json({ data: await updateBrand(brandId, profile) });
   } catch (error) {
     return errorResponse(error);
   }
