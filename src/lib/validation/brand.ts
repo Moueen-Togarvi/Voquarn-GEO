@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { registrableDomain } from "@/lib/domains/canonical";
+
 // Users routinely type a bare domain ("example.com"). Treat a missing scheme as
 // https so the URL checks below see something parseable. Anything that already
 // carries a scheme (including non-web ones like mailto:) is left untouched so
@@ -40,11 +42,8 @@ export function normalizeUrl(value: string): string {
 }
 
 export function domainFromUrl(value: string): string {
-  return (
-    parseUrl(withProtocol(value))
-      ?.hostname.toLowerCase()
-      .replace(/^www\./, "") ?? ""
-  );
+  const hostname = parseUrl(withProtocol(value))?.hostname;
+  return hostname ? registrableDomain(hostname) : "";
 }
 
 const websiteUrlSchema = z

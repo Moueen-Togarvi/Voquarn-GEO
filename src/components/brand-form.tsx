@@ -2,17 +2,22 @@
 
 import { Check, Globe2, Search, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import type { ApiFailure, ApiSuccess, BrandDto } from "@/lib/brands/types";
+import { useState } from "react";
+import {
+  OperationProgress,
+  useOperationPolling,
+} from "@/components/operation-progress";
+import type { ApiAccepted, ApiFailure } from "@/lib/api/types";
+import type { BrandDto } from "@/lib/brands/types";
+import type { OperationDto } from "@/lib/operations/types";
 import { brandDiscoveryInputSchema } from "@/lib/validation/brand";
 
 type FormValue = { name: string; websiteUrl: string };
 
-const researchSteps = [
-  "Reading your website…",
-  "Understanding your product and category…",
-  "Finding and verifying direct competitors…",
-];
+function brandIdFromOperation(operation: OperationDto): string | null {
+  const brandId = operation.metadata?.brandId;
+  return typeof brandId === "string" ? brandId : null;
+}
 
 export function BrandForm({ brand }: { brand?: BrandDto }) {
   const router = useRouter();
@@ -25,19 +30,44 @@ export function BrandForm({ brand }: { brand?: BrandDto }) {
   const [status, setStatus] = useState<"idle" | "researching" | "saved">(
     "idle",
   );
-  const [researchStep, setResearchStep] = useState(0);
+  const [operationId, setOperationId] = useState<string | null>(null);
   const isEditing = Boolean(brand);
 
-  useEffect(() => {
-    if (status !== "researching") return;
+  const { operation, pollError } = useOperationPolling(
+    operationId,
+    (settled) => {
+      setOperationId(null);
 
-    const interval = window.setInterval(() => {
-      setResearchStep((current) =>
-        Math.min(current + 1, researchSteps.length - 1),
-      );
-    }, 2600);
-    return () => window.clearInterval(interval);
-  }, [status]);
+      if (settled.status === "FAILED" || settled.status === "CANCELLED") {
+        setServerError(
+          settled.errorMessage ??
+            "Research did not complete. Check the name and URL, then try again.",
+        );
+        setStatus("idle");
+        return;
+      }
+
+      if (isEditing) {
+        setStatus("saved");
+        router.refresh();
+        window.setTimeout(() => setStatus("idle"), 2200);
+        return;
+      }
+
+      const brandId = brandIdFromOperation(settled);
+      if (brandId) {
+        // Not the project yet — the project is still a DRAFT until the
+        // onboarding wizard's review and market steps finish.
+        router.push(`/onboarding/review/${brandId}`);
+        router.refresh();
+      } else {
+        setServerError(
+          "Research finished, but the project could not be found.",
+        );
+        setStatus("idle");
+      }
+    },
+  );
 
   function updateField(field: keyof FormValue, fieldValue: string) {
     setValue((current) => ({ ...current, [field]: fieldValue }));
@@ -58,7 +88,6 @@ export function BrandForm({ brand }: { brand?: BrandDto }) {
       return;
     }
 
-    setResearchStep(0);
     setStatus("researching");
     try {
       const response = await fetch(
@@ -69,10 +98,9 @@ export function BrandForm({ brand }: { brand?: BrandDto }) {
           body: JSON.stringify(parsed.data),
         },
       );
-      const payload = (await response.json()) as
-        ApiSuccess<BrandDto> | ApiFailure;
+      const payload = (await response.json()) as ApiAccepted | ApiFailure;
 
-      if (!response.ok || !("data" in payload)) {
+      if (response.status !== 202 || !("operationId" in payload)) {
         if ("error" in payload) {
           setServerError(payload.error.message);
           setErrors((current) => ({
@@ -88,18 +116,7 @@ export function BrandForm({ brand }: { brand?: BrandDto }) {
         return;
       }
 
-      if (isEditing) {
-        setValue({
-          name: payload.data.name,
-          websiteUrl: payload.data.websiteUrl,
-        });
-        setStatus("saved");
-        router.refresh();
-        window.setTimeout(() => setStatus("idle"), 2200);
-      } else {
-        router.push(`/projects/${payload.data.id}/overview`);
-        router.refresh();
-      }
+      setOperationId(payload.operationId);
     } catch {
       setServerError(
         "We could not reach the server. Check your connection and try again.",
@@ -226,12 +243,18 @@ export function BrandForm({ brand }: { brand?: BrandDto }) {
         </section>
 
         {status === "researching" ? (
-          <div className="research-progress" role="status" aria-live="polite">
-            <span className="research-spinner" />
-            <div>
-              <strong>{researchSteps[researchStep]}</strong>
-              <small>This can take around 20–60 seconds.</small>
-            </div>
+          <OperationProgress
+            operation={operation}
+            label={
+              operation?.status === "RUNNING"
+                ? "Researching your company…"
+                : "Starting research…"
+            }
+          />
+        ) : null}
+        {pollError ? (
+          <div className="form-alert" role="alert">
+            {pollError}
           </div>
         ) : null}
 

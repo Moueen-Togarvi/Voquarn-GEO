@@ -1,18 +1,12 @@
 import { z } from "zod";
-import { AppError } from "@/lib/api/errors";
-import { glm } from "@/lib/llm/glm";
-import type { LlmMessage } from "@/lib/llm/types";
+
+import type { GenerateJsonInput, LlmMessage } from "@/lib/llm/types";
 import {
   brandInputSchema,
   type BrandDiscoveryInput,
   type BrandInput,
 } from "@/lib/validation/brand";
-import {
-  assertPublicWebsiteUrl,
-  readPublicWebsite,
-  UnsafeWebsiteError,
-  type WebsiteSnapshot,
-} from "@/lib/discovery/website";
+import type { WebsiteSnapshot } from "@/lib/discovery/website";
 
 export const discoveredProfileSchema = z.object({
   description: z
@@ -37,6 +31,8 @@ export const discoveredProfileSchema = z.object({
     .min(2)
     .max(4),
 });
+
+export type DiscoveredProfile = z.infer<typeof discoveredProfileSchema>;
 
 export function buildDiscoveryMessages(
   input: BrandDiscoveryInput,
@@ -72,7 +68,12 @@ export function buildDiscoveryMessages(
   ];
 }
 
-function fixtureProfile(input: BrandDiscoveryInput): BrandInput {
+/** Deterministic, network-free profile used by Playwright so e2e never depends on a live LLM. */
+export function shouldUseDiscoveryFixture(): boolean {
+  return process.env.E2E_DISCOVERY_FIXTURE === "true";
+}
+
+export function fixtureProfile(input: BrandDiscoveryInput): BrandInput {
   return brandInputSchema.parse({
     ...input,
     description: `${input.name} provides software that helps teams understand and improve their market presence.`,
@@ -84,50 +85,23 @@ function fixtureProfile(input: BrandDiscoveryInput): BrandInput {
   });
 }
 
-export async function discoverBrandProfile(
+/** The generateJson call the discovery Inngest function makes, minus the provider itself — kept separate so it can be wrapped in withProviderCall there. */
+export function buildDiscoveryRequest(
   input: BrandDiscoveryInput,
-): Promise<BrandInput> {
-  try {
-    await assertPublicWebsiteUrl(input.websiteUrl);
-  } catch (error) {
-    if (error instanceof UnsafeWebsiteError) {
-      throw new AppError(400, "UNSAFE_WEBSITE_URL", error.message, {
-        websiteUrl: [error.message],
-      });
-    }
-    throw error;
-  }
+  snapshot: WebsiteSnapshot | null,
+): GenerateJsonInput<DiscoveredProfile> {
+  return {
+    messages: buildDiscoveryMessages(input, snapshot),
+    schema: discoveredProfileSchema,
+    webSearch: true,
+    maxTokens: 1600,
+    temperature: 0.1,
+  };
+}
 
-  if (process.env.E2E_DISCOVERY_FIXTURE === "true") {
-    return fixtureProfile(input);
-  }
-
-  if (!process.env.ZAI_API_KEY) {
-    throw new AppError(
-      503,
-      "AI_NOT_CONFIGURED",
-      "Automatic brand research is not configured. Add ZAI_API_KEY and try again.",
-    );
-  }
-
-  const snapshot = await readPublicWebsite(input.websiteUrl);
-
-  try {
-    const result = await glm.generateJson({
-      messages: buildDiscoveryMessages(input, snapshot),
-      schema: discoveredProfileSchema,
-      webSearch: true,
-      maxTokens: 1600,
-      temperature: 0.1,
-    });
-
-    return brandInputSchema.parse({ ...input, ...result.content });
-  } catch (error) {
-    console.error("Brand discovery failed", error);
-    throw new AppError(
-      502,
-      "DISCOVERY_FAILED",
-      "We could not confidently research this company. Check the name and URL, then try again.",
-    );
-  }
+export function parseDiscoveredProfile(
+  input: BrandDiscoveryInput,
+  content: DiscoveredProfile,
+): BrandInput {
+  return brandInputSchema.parse({ ...input, ...content });
 }

@@ -10,7 +10,7 @@ import {
 describe("GLM provider foundation", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("uses the official GLM-5.1 endpoint and model by default", () => {
+  it("uses the official GLM-5.2 endpoint and model by default", () => {
     expect(ZAI_CHAT_ENDPOINT).toBe(
       "https://api.z.ai/api/paas/v4/chat/completions",
     );

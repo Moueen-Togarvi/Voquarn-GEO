@@ -1,0 +1,13 @@
+{
+  "id": "case-variation",
+  "description": "Mention detection must be case-insensitive",
+  "answerText": "voquarn tends to come up in this category, especially for smaller teams.",
+  "brandAliases": ["Voquarn"],
+  "competitors": [],
+  "expected": {
+    "brandMentioned": true,
+    "mentionCount": 1,
+    "refused": false,
+    "competitorMentions": {}
+  }
+}

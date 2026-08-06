@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import type { ErrorCode } from "@/lib/api/error-codes";
+
 export class AppError extends Error {
   constructor(
     public readonly status: number,
-    public readonly code: string,
+    public readonly code: ErrorCode,
     message: string,
     public readonly fieldErrors?: Record<string, string[] | undefined>,
   ) {

@@ -19,7 +19,7 @@ export default function ModelsPage() {
         </div>
         <div className="model-copy">
           <div className="model-title-row">
-            <h2>GLM-5.1</h2>
+            <h2>GLM-5.2</h2>
             <span
               className={configured ? "status-pill success" : "status-pill"}
             >

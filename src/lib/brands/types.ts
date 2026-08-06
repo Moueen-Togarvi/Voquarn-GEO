@@ -1,3 +1,8 @@
+import type {
+  BrandStatus,
+  CompetitorSource,
+  CompetitorStatus,
+} from "@/generated/prisma/enums";
 import type { BrandInput } from "@/lib/validation/brand";
 
 export type CompetitorDto = {
@@ -5,6 +10,8 @@ export type CompetitorDto = {
   name: string;
   websiteUrl: string;
   domain: string;
+  status: CompetitorStatus;
+  source: CompetitorSource;
 };
 
 export type BrandDto = {
@@ -14,18 +21,11 @@ export type BrandDto = {
   domain: string;
   description: string;
   category: string;
+  status: BrandStatus;
+  defaultMarketId: string | null;
   createdAt: string;
   updatedAt: string;
   competitors: CompetitorDto[];
 };
 
 export type BrandMutationPayload = BrandInput;
-
-export type ApiSuccess<T> = { data: T };
-export type ApiFailure = {
-  error: {
-    code: string;
-    message: string;
-    fieldErrors?: Record<string, string[] | undefined>;
-  };
-};

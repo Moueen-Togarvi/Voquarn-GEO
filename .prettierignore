@@ -7,3 +7,7 @@ coverage
 prisma/migrations
 *.lock
 package-lock.json
+
+# Author-owned planning documents — reformatting churns the user's prose.
+RankHunter_AI_Implementation_Plan.md
+Vouarn GEo_Final_PRD.md

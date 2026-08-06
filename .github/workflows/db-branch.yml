@@ -1,0 +1,89 @@
+# Integration and end-to-end tests need a real Neon endpoint, because the app
+# connects through @prisma/adapter-neon rather than plain Postgres. Each run
+# gets a disposable copy-on-write branch of the production schema.
+#
+# Requires two repository settings before this workflow does anything:
+#   secrets.NEON_API_KEY   — Neon personal API key
+#   vars.NEON_PROJECT_ID   — the Neon project to branch from
+# Without them the workflow skips rather than failing red.
+
+name: Integration (Neon branch)
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+
+concurrency:
+  group: neon-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  configured:
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - id: check
+        run: echo "ready=${{ secrets.NEON_API_KEY != '' && vars.NEON_PROJECT_ID != '' }}" >> "$GITHUB_OUTPUT"
+
+  integration:
+    name: Integration and E2E
+    needs: configured
+    if: needs.configured.outputs.ready == 'true' && github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create Neon branch
+        id: branch
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch_name: ci/pr-${{ github.event.number }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ steps.branch.outputs.db_url_with_pooler }}
+          DIRECT_URL: ${{ steps.branch.outputs.db_url }}
+
+      - name: Integration tests
+        run: npm run test:integration
+        env:
+          DATABASE_URL: ${{ steps.branch.outputs.db_url_with_pooler }}
+          DIRECT_URL: ${{ steps.branch.outputs.db_url }}
+          TEST_DATABASE_URL: ${{ steps.branch.outputs.db_url_with_pooler }}
+
+      - run: npx playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        run: npm run test:e2e
+        env:
+          DATABASE_URL: ${{ steps.branch.outputs.db_url_with_pooler }}
+          DIRECT_URL: ${{ steps.branch.outputs.db_url }}
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  cleanup:
+    name: Delete Neon branch
+    needs: configured
+    if: needs.configured.outputs.ready == 'true' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch: ci/pr-${{ github.event.number }}
+          api_key: ${{ secrets.NEON_API_KEY }}

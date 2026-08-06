@@ -1,0 +1,30 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Next and React must move together; separate PRs just fail to build.
+      next-react:
+        patterns:
+          [
+            "next",
+            "react",
+            "react-dom",
+            "@types/react",
+            "@types/react-dom",
+            "eslint-config-next",
+          ]
+      prisma:
+        patterns: ["prisma", "@prisma/*"]
+      dev-tooling:
+        dependency-type: development
+        patterns: ["*"]
+        exclude-patterns: ["prisma", "@prisma/*"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly

@@ -1,0 +1,13 @@
+{
+  "id": "hedge-not-refusal",
+  "description": "A hedged but real answer must NOT be classified as a refusal",
+  "answerText": "I'm not entirely certain about the latest pricing, but Voquarn and Market Signal are both commonly recommended for this.",
+  "brandAliases": ["Voquarn"],
+  "competitors": [{ "id": "comp-market-signal", "aliases": ["Market Signal"] }],
+  "expected": {
+    "brandMentioned": true,
+    "mentionCount": 1,
+    "refused": false,
+    "competitorMentions": { "comp-market-signal": 1 }
+  }
+}

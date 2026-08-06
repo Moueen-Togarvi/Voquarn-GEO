@@ -8,10 +8,29 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getLatestAggregate } from "@/lib/benchmark/service";
+import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
+import { requireWorkspaceContext } from "@/lib/auth/context";
 import { getBrand } from "@/lib/brands/service";
+import { resolveDefault } from "@/lib/llm/registry";
+import { listActivePrompts } from "@/lib/prompts/service";
 
 export const metadata = { title: "Overview" };
+
+function formatPercent(value: number | null | undefined): string {
+  return value == null ? "—" : `${Math.round(value * 100)}%`;
+}
+
+function dominantSentiment(dist: Record<string, number> | undefined): string {
+  if (!dist) return "—";
+  const entries = Object.entries(dist).filter(([, count]) => count > 0);
+  if (entries.length === 0) return "—";
+  const [label] = entries.reduce((best, entry) =>
+    entry[1] > best[1] ? entry : best,
+  );
+  return label.charAt(0) + label.slice(1).toLowerCase();
+}
 
 export default async function OverviewPage({
   params,
@@ -19,8 +38,19 @@ export default async function OverviewPage({
   params: Promise<{ brandId: string }>;
 }) {
   const { brandId } = await params;
-  const brand = await getBrand(brandId);
+  const ctx = await requireWorkspaceContext();
+  const brand = await getBrand(ctx, brandId);
   if (!brand) notFound();
+
+  const [activePrompts, latest] = await Promise.all([
+    listActivePrompts(ctx, brand.id),
+    getLatestAggregate(ctx, brand.id),
+  ]);
+  const model = resolveDefault("benchmark");
+
+  const hasPrompts = activePrompts.length > 0;
+  const hasRun = latest !== null;
+  const stepsComplete = 1 + Number(hasPrompts) + Number(hasRun);
 
   return (
     <div className="page-container">
@@ -29,29 +59,40 @@ export default async function OverviewPage({
         title={`Good to have ${brand.name} here.`}
         description="Your project foundation is ready. Complete the next steps to start measuring AI visibility."
         action={
-          <button
+          <Link
             className="button button-primary"
-            disabled
-            title="Available in the prompt tracking milestone"
+            href={`/projects/${brand.id}/runs`}
           >
             <Play size={16} fill="currentColor" /> Run analysis
-          </button>
+          </Link>
         }
       />
 
-      <section className="metric-grid" aria-label="Future visibility metrics">
-        {[
-          ["Visibility", "—", "Chats mentioning your brand"],
-          ["Share of voice", "—", "Mentions vs competitors"],
-          ["Sentiment", "—", "How AI describes you"],
-          ["Position", "—", "Average mention order"],
-        ].map(([label, value, caption]) => (
-          <article className="metric-card" key={label}>
-            <span>{label}</span>
-            <strong>{value}</strong>
-            <small>{caption}</small>
-          </article>
-        ))}
+      <section className="metric-grid" aria-label="Visibility metrics">
+        <MetricCard
+          label="Visibility"
+          value={formatPercent(latest?.aggregate.visibility)}
+          caption="Runs mentioning your brand"
+        />
+        <MetricCard
+          label="Share of voice"
+          value={formatPercent(latest?.aggregate.shareOfVoice)}
+          caption="Mentions vs competitors"
+        />
+        <MetricCard
+          label="Sentiment"
+          value={dominantSentiment(latest?.aggregate.sentimentDist)}
+          caption="How AI describes you"
+        />
+        <MetricCard
+          label="Position"
+          value={
+            latest?.aggregate.avgPosition != null
+              ? latest.aggregate.avgPosition.toFixed(1)
+              : "—"
+          }
+          caption="Average mention order"
+        />
       </section>
 
       <div className="overview-grid">
@@ -61,10 +102,10 @@ export default async function OverviewPage({
               <p className="page-eyebrow">Getting started</p>
               <h2>Your measurement setup</h2>
             </div>
-            <span className="progress-label">1 of 3</span>
+            <span className="progress-label">{stepsComplete} of 3</span>
           </div>
           <div className="progress-track">
-            <span style={{ width: "33.333%" }} />
+            <span style={{ width: `${(stepsComplete / 3) * 100}%` }} />
           </div>
           <div className="setup-list">
             <div className="setup-item complete">
@@ -78,9 +119,12 @@ export default async function OverviewPage({
                 </p>
               </div>
             </div>
-            <Link className="setup-item" href={`/projects/${brand.id}/prompts`}>
+            <Link
+              className={`setup-item${hasPrompts ? "complete" : ""}`}
+              href={`/projects/${brand.id}/prompts`}
+            >
               <span className="setup-status">
-                <Circle size={16} />
+                {hasPrompts ? <Check size={16} /> : <Circle size={16} />}
               </span>
               <div>
                 <strong>Build your prompt library</strong>
@@ -88,15 +132,19 @@ export default async function OverviewPage({
               </div>
               <ArrowUpRight size={17} />
             </Link>
-            <div className="setup-item disabled">
+            <Link
+              className={`setup-item${hasRun ? "complete" : ""}`}
+              href={`/projects/${brand.id}/runs`}
+            >
               <span className="setup-status">
-                <Circle size={16} />
+                {hasRun ? <Check size={16} /> : <Circle size={16} />}
               </span>
               <div>
                 <strong>Run your first analysis</strong>
                 <p>Measure mentions, position, sentiment, and sources.</p>
               </div>
-            </div>
+              <ArrowUpRight size={17} />
+            </Link>
           </div>
         </section>
 
@@ -121,13 +169,16 @@ export default async function OverviewPage({
             <div>
               <dt>Prompts</dt>
               <dd>
-                <FileQuestion size={15} /> Not configured
+                <FileQuestion size={15} />{" "}
+                {hasPrompts
+                  ? `${activePrompts.length} active`
+                  : "Not configured"}
               </dd>
             </div>
             <div>
               <dt>Primary model</dt>
               <dd>
-                <span className="model-dot" /> GLM-5.1
+                <span className="model-dot" /> {model.model}
               </dd>
             </div>
           </dl>

@@ -3,7 +3,6 @@ import { buildDiscoveryMessages } from "@/lib/discovery/brand-profile";
 import {
   assertPublicWebsiteUrl,
   extractWebsiteSnapshot,
-  isPrivateAddress,
   UnsafeWebsiteError,
 } from "@/lib/discovery/website";
 
@@ -37,13 +36,9 @@ describe("automatic brand discovery", () => {
     expect(result.text).not.toContain("secret");
   });
 
-  it("recognizes private network addresses", () => {
-    expect(isPrivateAddress("127.0.0.1")).toBe(true);
-    expect(isPrivateAddress("10.2.3.4")).toBe(true);
-    expect(isPrivateAddress("::1")).toBe(true);
-    expect(isPrivateAddress("8.8.8.8")).toBe(false);
-  });
-
+  // Private-address classification itself is covered exhaustively in
+  // tests/unit/net-ip.test.ts; these confirm assertPublicWebsiteUrl actually
+  // uses it end to end.
   it("rejects localhost and private IP website targets", async () => {
     await expect(
       assertPublicWebsiteUrl("http://localhost:3000"),
@@ -54,5 +49,11 @@ describe("automatic brand discovery", () => {
     await expect(assertPublicWebsiteUrl("http://[::1]")).rejects.toBeInstanceOf(
       UnsafeWebsiteError,
     );
+  });
+
+  it("returns the validated address for a public literal IP, for pinning", async () => {
+    await expect(assertPublicWebsiteUrl("http://8.8.8.8")).resolves.toEqual({
+      address: "8.8.8.8",
+    });
   });
 });

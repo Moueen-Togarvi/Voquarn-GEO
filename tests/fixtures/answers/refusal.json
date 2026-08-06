@@ -1,0 +1,13 @@
+{
+  "id": "refusal",
+  "description": "Explicit decline to answer — must be flagged refused, not treated as a plain non-mention",
+  "answerText": "I'm sorry, but I can't help with ranking or recommending specific commercial products.",
+  "brandAliases": ["Voquarn"],
+  "competitors": [],
+  "expected": {
+    "brandMentioned": false,
+    "mentionCount": 0,
+    "refused": true,
+    "competitorMentions": {}
+  }
+}

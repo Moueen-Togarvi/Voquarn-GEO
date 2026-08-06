@@ -161,7 +161,15 @@ export class GlmProvider implements LlmProvider {
     return {
       provider: this.provider,
       model: this.model,
+      providerVersion: null,
       requestId: payload.request_id ?? payload.id ?? null,
+      requestedAt: null,
+      completedAt: null,
+      costUnits: null,
+      currency: null,
+      rawSnapshotRef: null,
+      finishReason: choice?.finish_reason ?? null,
+      cached: false,
       content: parse(content),
       sources,
       usage: {
@@ -172,5 +180,3 @@ export class GlmProvider implements LlmProvider {
     };
   }
 }
-
-export const glm = new GlmProvider();

@@ -1,0 +1,16 @@
+{
+  "id": "competitor-comparison",
+  "description": "Brand and two competitors all mentioned — exercises position ranking, not just presence",
+  "answerText": "Market Signal is a common starting point, but Voquarn and Search Scope both come up frequently as alternatives worth a look.",
+  "brandAliases": ["Voquarn"],
+  "competitors": [
+    { "id": "comp-market-signal", "aliases": ["Market Signal"] },
+    { "id": "comp-search-scope", "aliases": ["Search Scope"] }
+  ],
+  "expected": {
+    "brandMentioned": true,
+    "mentionCount": 1,
+    "refused": false,
+    "competitorMentions": { "comp-market-signal": 1, "comp-search-scope": 1 }
+  }
+}

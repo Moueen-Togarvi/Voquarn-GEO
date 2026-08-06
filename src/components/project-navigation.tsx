@@ -6,21 +6,27 @@ import {
   ChevronDown,
   FileQuestion,
   Globe2,
+  LogOut,
   Menu,
   Plus,
   Settings,
+  TrendingUp,
+  Users,
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+import { signOut } from "@/lib/auth/client";
 import type { BrandDto } from "@/lib/brands/types";
 import { cn, initials } from "@/lib/utils";
 
 const navItems = [
   { label: "Overview", slug: "overview", icon: BarChart3, next: false },
-  { label: "Prompts", slug: "prompts", icon: FileQuestion, next: true },
-  { label: "Sources", slug: "sources", icon: Globe2, next: true },
+  { label: "Prompts", slug: "prompts", icon: FileQuestion, next: false },
+  { label: "Runs", slug: "runs", icon: TrendingUp, next: false },
+  { label: "Sources", slug: "sources", icon: Globe2, next: false },
   { label: "Models", slug: "models", icon: Bot, next: true },
 ] as const;
 
@@ -105,12 +111,21 @@ function NavigationContent({
   current,
   projects,
   close,
+  authEnabled,
 }: {
   current: BrandDto;
   projects: BrandDto[];
   close?: () => void;
+  authEnabled: boolean;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function handleSignOut() {
+    await signOut();
+    router.push("/sign-in");
+    router.refresh();
+  }
 
   return (
     <>
@@ -132,6 +147,8 @@ function NavigationContent({
         ) : null}
       </div>
 
+      {authEnabled ? <WorkspaceSwitcher /> : null}
+
       <ProjectSwitcher
         current={current}
         projects={projects}
@@ -142,7 +159,7 @@ function NavigationContent({
         <span className="nav-section-label">Workspace</span>
         {navItems.map((item) => {
           const href = `/projects/${current.id}/${item.slug}`;
-          const active = pathname === href;
+          const active = pathname === href || pathname.startsWith(`${href}/`);
           return (
             <Link
               className={cn("nav-item", active && "is-active")}
@@ -170,10 +187,29 @@ function NavigationContent({
           <Settings size={18} />
           <span>Project settings</span>
         </Link>
+        {authEnabled ? (
+          <Link
+            className={cn(
+              "nav-item",
+              pathname === "/settings/members" && "is-active",
+            )}
+            href="/settings/members"
+            onClick={close}
+          >
+            <Users size={18} />
+            <span>Members</span>
+          </Link>
+        ) : null}
+        {authEnabled ? (
+          <button className="nav-item" type="button" onClick={handleSignOut}>
+            <LogOut size={18} />
+            <span>Sign out</span>
+          </button>
+        ) : null}
         <div className="phase-card">
-          <span>Phase 1</span>
-          <strong>Foundation ready</strong>
-          <p>Prompt tracking is the next milestone.</p>
+          <span>Phase 2</span>
+          <strong>AI visibility measurement</strong>
+          <p>Competitor hunting is the next milestone.</p>
         </div>
       </div>
     </>
@@ -183,9 +219,12 @@ function NavigationContent({
 export function ProjectNavigation({
   current,
   projects,
+  authEnabled = false,
 }: {
   current: BrandDto;
   projects: BrandDto[];
+  /** See src/lib/auth/flag.ts — off hides Members/sign-out/workspace switching, which have nothing to act on yet. */
+  authEnabled?: boolean;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -196,7 +235,11 @@ export function ProjectNavigation({
   return (
     <>
       <aside className="sidebar desktop-sidebar">
-        <NavigationContent current={current} projects={projects} />
+        <NavigationContent
+          current={current}
+          projects={projects}
+          authEnabled={authEnabled}
+        />
       </aside>
 
       <header className="mobile-header">
@@ -227,6 +270,7 @@ export function ProjectNavigation({
               current={current}
               projects={projects}
               close={() => setMobileOpen(false)}
+              authEnabled={authEnabled}
             />
           </aside>
         </div>

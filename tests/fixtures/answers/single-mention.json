@@ -1,0 +1,13 @@
+{
+  "id": "single-mention",
+  "description": "Brand mentioned exactly once, no competitors mentioned",
+  "answerText": "For teams that need to track how AI assistants describe them, Voquarn is a solid choice with a straightforward setup.",
+  "brandAliases": ["Voquarn"],
+  "competitors": [{ "id": "comp-market-signal", "aliases": ["Market Signal"] }],
+  "expected": {
+    "brandMentioned": true,
+    "mentionCount": 1,
+    "refused": false,
+    "competitorMentions": { "comp-market-signal": 0 }
+  }
+}

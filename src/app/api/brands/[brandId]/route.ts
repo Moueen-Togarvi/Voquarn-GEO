@@ -1,46 +1,76 @@
 import { NextResponse } from "next/server";
-import { errorResponse, AppError } from "@/lib/api/errors";
-import { deleteBrand, getBrand, updateBrand } from "@/lib/brands/service";
-import { discoverBrandProfile } from "@/lib/discovery/brand-profile";
+
+import type { ApiAccepted, ApiSuccess } from "@/lib/api/types";
+import { AppError } from "@/lib/api/errors";
+import { route } from "@/lib/api/handler";
+import { deleteBrand, getBrand } from "@/lib/brands/service";
+import type { BrandDto } from "@/lib/brands/types";
+import {
+  assertPublicWebsiteUrl,
+  UnsafeWebsiteError,
+} from "@/lib/discovery/website";
+import { inngest } from "@/lib/inngest/client";
+import { brandDiscoveryRequested } from "@/lib/inngest/events";
+import { createOperation } from "@/lib/operations/service";
 import {
   brandDiscoveryInputSchema,
   deleteBrandSchema,
 } from "@/lib/validation/brand";
 
-type RouteContext = { params: Promise<{ brandId: string }> };
+type RouteParams = { brandId: string };
 
-export async function GET(_request: Request, context: RouteContext) {
+export const GET = route<RouteParams>(async ({ ctx, params }) => {
+  const brand = await getBrand(ctx, params.brandId);
+  if (!brand) {
+    throw new AppError(404, "BRAND_NOT_FOUND", "Project not found.");
+  }
+  return NextResponse.json({ data: brand } satisfies ApiSuccess<BrandDto>);
+});
+
+export const PATCH = route<RouteParams>(async ({ ctx, request, params }) => {
+  const existing = await getBrand(ctx, params.brandId);
+  if (!existing) {
+    throw new AppError(404, "BRAND_NOT_FOUND", "Project not found.");
+  }
+
+  const input = brandDiscoveryInputSchema.parse(await request.json());
+
   try {
-    const { brandId } = await context.params;
-    const brand = await getBrand(brandId);
-    if (!brand) {
-      throw new AppError(404, "BRAND_NOT_FOUND", "Project not found.");
+    await assertPublicWebsiteUrl(input.websiteUrl);
+  } catch (error) {
+    if (error instanceof UnsafeWebsiteError) {
+      throw new AppError(400, "UNSAFE_WEBSITE_URL", error.message, {
+        websiteUrl: [error.message],
+      });
     }
-    return NextResponse.json({ data: brand });
-  } catch (error) {
-    return errorResponse(error);
+    throw error;
   }
-}
 
-export async function PATCH(request: Request, context: RouteContext) {
-  try {
-    const { brandId } = await context.params;
-    const input = brandDiscoveryInputSchema.parse(await request.json());
-    const profile = await discoverBrandProfile(input);
-    return NextResponse.json({ data: await updateBrand(brandId, profile) });
-  } catch (error) {
-    return errorResponse(error);
-  }
-}
+  const operation = await createOperation(ctx, {
+    kind: "BRAND_DISCOVERY",
+    brandId: existing.id,
+    progressTotal: 4,
+  });
 
-export async function DELETE(request: Request, context: RouteContext) {
-  try {
-    const { brandId } = await context.params;
-    const { confirmation } = deleteBrandSchema.parse(await request.json());
-    return NextResponse.json({
-      data: await deleteBrand(brandId, confirmation),
-    });
-  } catch (error) {
-    return errorResponse(error);
-  }
-}
+  await inngest.send(
+    brandDiscoveryRequested.create({
+      workspaceId: ctx.workspaceId,
+      operationId: operation.id,
+      brandId: existing.id,
+      name: input.name,
+      websiteUrl: input.websiteUrl,
+    }),
+  );
+
+  return NextResponse.json(
+    { operationId: operation.id } satisfies ApiAccepted,
+    { status: 202 },
+  );
+});
+
+export const DELETE = route<RouteParams>(async ({ ctx, request, params }) => {
+  const { confirmation } = deleteBrandSchema.parse(await request.json());
+  return NextResponse.json({
+    data: await deleteBrand(ctx, params.brandId, confirmation),
+  } satisfies ApiSuccess<{ deletedId: string; nextBrandId: string | null }>);
+});

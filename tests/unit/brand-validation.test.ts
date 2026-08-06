@@ -37,6 +37,14 @@ describe("brand validation", () => {
     expect(domainFromUrl("https://www.example.com/path")).toBe("example.com");
   });
 
+  it("extracts the registrable domain across subdomains and multi-part suffixes", () => {
+    // A naive "strip www." parser would leave these as three different
+    // domains; two of them are the same company on different subdomains.
+    expect(domainFromUrl("https://shop.example.co.uk")).toBe("example.co.uk");
+    expect(domainFromUrl("https://blog.example.co.uk")).toBe("example.co.uk");
+    expect(domainFromUrl("https://example.co.uk")).toBe("example.co.uk");
+  });
+
   it("accepts and normalizes a complete onboarding payload", () => {
     const result = brandInputSchema.parse(validInput);
     expect(result.websiteUrl).toBe("https://www.voquarn.com");

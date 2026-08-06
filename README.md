@@ -7,7 +7,7 @@ job, and LLM contracts required for AI visibility measurement.
 ## Stack
 
 Next.js 16 · React 19 · TypeScript · Tailwind CSS v4 · Prisma 7 · Neon
-PostgreSQL · Inngest · GLM-5.1
+PostgreSQL · Inngest · GLM-5.2
 
 ## Getting started
 
@@ -60,11 +60,11 @@ onboarding.
 - Create, switch, re-analyze, and delete tracked brand projects.
 - Ask the user for only a company name and official website URL.
 - Research the product, specific category, and 2–4 direct competitors with
-  website scraping plus GLM-5.1 web search.
+  website scraping plus GLM-5.2 web search.
 - Validate and normalize every AI-discovered field before persistence.
 - Navigate Peec-inspired Overview, Prompts, Sources, Models, and Settings views.
 - Keep analytics views as explicit empty states until prompt execution ships.
-- Use a typed GLM-5.1 adapter for structured onboarding research while leaving
+- Use a typed GLM-5.2 adapter for structured onboarding research while leaving
   prompt generation and visibility analysis for the next milestone.
 
 The no-auth deployment is intended for a protected Vercel preview. Do not

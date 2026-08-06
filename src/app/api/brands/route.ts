@@ -1,24 +1,58 @@
 import { NextResponse } from "next/server";
-import { errorResponse } from "@/lib/api/errors";
-import { createBrand, listBrands } from "@/lib/brands/service";
-import { discoverBrandProfile } from "@/lib/discovery/brand-profile";
+
+import type { ApiAccepted, ApiSuccess } from "@/lib/api/types";
+import { AppError } from "@/lib/api/errors";
+import { route } from "@/lib/api/handler";
+import { listBrands } from "@/lib/brands/service";
+import type { BrandDto } from "@/lib/brands/types";
+import {
+  assertPublicWebsiteUrl,
+  UnsafeWebsiteError,
+} from "@/lib/discovery/website";
+import { inngest } from "@/lib/inngest/client";
+import { brandDiscoveryRequested } from "@/lib/inngest/events";
+import { createOperation } from "@/lib/operations/service";
 import { brandDiscoveryInputSchema } from "@/lib/validation/brand";
 
-export async function GET() {
-  try {
-    return NextResponse.json({ data: await listBrands() });
-  } catch (error) {
-    return errorResponse(error);
-  }
-}
+export const GET = route(async ({ ctx }) => {
+  return NextResponse.json({
+    data: await listBrands(ctx),
+  } satisfies ApiSuccess<BrandDto[]>);
+});
 
-export async function POST(request: Request) {
+export const POST = route(async ({ ctx, request }) => {
+  const input = brandDiscoveryInputSchema.parse(await request.json());
+
+  // Fail fast on an obviously bad URL rather than creating an Operation that
+  // is only ever going to fail once a worker picks it up.
   try {
-    const input = brandDiscoveryInputSchema.parse(await request.json());
-    const profile = await discoverBrandProfile(input);
-    const brand = await createBrand(profile);
-    return NextResponse.json({ data: brand }, { status: 201 });
+    await assertPublicWebsiteUrl(input.websiteUrl);
   } catch (error) {
-    return errorResponse(error);
+    if (error instanceof UnsafeWebsiteError) {
+      throw new AppError(400, "UNSAFE_WEBSITE_URL", error.message, {
+        websiteUrl: [error.message],
+      });
+    }
+    throw error;
   }
-}
+
+  const operation = await createOperation(ctx, {
+    kind: "BRAND_DISCOVERY",
+    progressTotal: 4,
+  });
+
+  await inngest.send(
+    brandDiscoveryRequested.create({
+      workspaceId: ctx.workspaceId,
+      operationId: operation.id,
+      brandId: null,
+      name: input.name,
+      websiteUrl: input.websiteUrl,
+    }),
+  );
+
+  return NextResponse.json(
+    { operationId: operation.id } satisfies ApiAccepted,
+    { status: 202 },
+  );
+});

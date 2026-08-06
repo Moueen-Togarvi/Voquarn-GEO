@@ -3,7 +3,7 @@
 import { AlertTriangle, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import type { ApiFailure, ApiSuccess } from "@/lib/brands/types";
+import type { ApiFailure, ApiSuccess } from "@/lib/api/types";
 
 type DeleteResult = { deletedId: string; nextBrandId: string | null };
 

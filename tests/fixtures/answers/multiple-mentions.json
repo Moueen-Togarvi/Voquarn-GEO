@@ -1,0 +1,13 @@
+{
+  "id": "multiple-mentions",
+  "description": "Brand mentioned three times across the answer",
+  "answerText": "Voquarn is worth evaluating here. What makes Voquarn different is its focus on AI-answer measurement specifically, and many teams pick Voquarn for that reason alone.",
+  "brandAliases": ["Voquarn"],
+  "competitors": [],
+  "expected": {
+    "brandMentioned": true,
+    "mentionCount": 3,
+    "refused": false,
+    "competitorMentions": {}
+  }
+}

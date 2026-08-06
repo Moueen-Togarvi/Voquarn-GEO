@@ -1,11 +1,13 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { requireWorkspaceContext } from "@/lib/auth/context";
 import { listBrands } from "@/lib/brands/service";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [brands, cookieStore] = await Promise.all([listBrands(), cookies()]);
+  const ctx = await requireWorkspaceContext();
+  const [brands, cookieStore] = await Promise.all([listBrands(ctx), cookies()]);
 
   if (brands.length === 0) {
     redirect("/onboarding");

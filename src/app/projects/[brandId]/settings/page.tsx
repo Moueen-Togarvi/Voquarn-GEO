@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { BrandForm } from "@/components/brand-form";
 import { DeleteProject } from "@/components/delete-project";
 import { PageHeader } from "@/components/page-header";
+import { requireWorkspaceContext } from "@/lib/auth/context";
 import { getBrand } from "@/lib/brands/service";
 
 export const metadata = { title: "Project settings" };
@@ -12,7 +13,8 @@ export default async function SettingsPage({
   params: Promise<{ brandId: string }>;
 }) {
   const { brandId } = await params;
-  const brand = await getBrand(brandId);
+  const ctx = await requireWorkspaceContext();
+  const brand = await getBrand(ctx, brandId);
   if (!brand) notFound();
 
   return (

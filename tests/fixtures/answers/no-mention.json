@@ -1,0 +1,16 @@
+{
+  "id": "no-mention",
+  "description": "Brand absent; two competitors are mentioned instead",
+  "answerText": "Two options come up often here: Market Signal is popular with larger teams, while Search Scope tends to suit smaller ones.",
+  "brandAliases": ["Voquarn"],
+  "competitors": [
+    { "id": "comp-market-signal", "aliases": ["Market Signal"] },
+    { "id": "comp-search-scope", "aliases": ["Search Scope"] }
+  ],
+  "expected": {
+    "brandMentioned": false,
+    "mentionCount": 0,
+    "refused": false,
+    "competitorMentions": { "comp-market-signal": 1, "comp-search-scope": 1 }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "id": "lookalike-substring",
+  "description": "A different company whose name merely contains the brand as a substring must not count as a mention",
+  "answerText": "Voquarnish Analytics offers a loosely related reporting feature, but it's a separate, unrelated company.",
+  "brandAliases": ["Voquarn"],
+  "competitors": [],
+  "expected": {
+    "brandMentioned": false,
+    "mentionCount": 0,
+    "refused": false,
+    "competitorMentions": {}
+  }
+}

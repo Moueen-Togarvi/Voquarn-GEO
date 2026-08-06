@@ -1,6 +1,9 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 
+import { fetchPinned } from "@/lib/net/pinned-agent";
+import { isPrivateAddress } from "@/lib/net/ip";
+
 const MAX_REDIRECTS = 5;
 const MAX_HTML_BYTES = 1_500_000;
 const MAX_TEXT_LENGTH = 12_000;
@@ -15,55 +18,21 @@ export type WebsiteSnapshot = {
 
 export class UnsafeWebsiteError extends Error {}
 
-function isPrivateIpv4(address: string) {
-  const parts = address.split(".").map(Number);
-  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part))) {
-    return true;
-  }
-
-  const [first, second] = parts;
-  return (
-    first === 0 ||
-    first === 10 ||
-    first === 127 ||
-    (first === 169 && second === 254) ||
-    (first === 172 && second >= 16 && second <= 31) ||
-    (first === 192 && second === 168) ||
-    (first === 100 && second >= 64 && second <= 127) ||
-    (first === 192 && second === 0) ||
-    (first === 198 && (second === 18 || second === 19)) ||
-    (first === 192 && second === 0 && parts[2] === 2) ||
-    (first === 198 && second === 51 && parts[2] === 100) ||
-    (first === 203 && second === 0 && parts[2] === 113) ||
-    first >= 224
-  );
-}
-
-function isPrivateIpv6(address: string) {
-  const normalized = address.toLowerCase().split("%")[0];
-  return (
-    normalized === "::" ||
-    normalized === "::1" ||
-    normalized.startsWith("fc") ||
-    normalized.startsWith("fd") ||
-    normalized.startsWith("fe8") ||
-    normalized.startsWith("fe9") ||
-    normalized.startsWith("fea") ||
-    normalized.startsWith("feb") ||
-    normalized.startsWith("::ffff:127.") ||
-    normalized.startsWith("::ffff:10.") ||
-    normalized.startsWith("::ffff:192.168.")
-  );
-}
-
-export function isPrivateAddress(address: string) {
-  const version = isIP(address);
-  if (version === 4) return isPrivateIpv4(address);
-  if (version === 6) return isPrivateIpv6(address);
-  return true;
-}
-
-export async function assertPublicWebsiteUrl(value: string) {
+/**
+ * Validates `value` and returns the specific IP address that was checked and
+ * found public, so the caller can pin the actual HTTP connection to it — see
+ * src/lib/net/pinned-agent.ts. Without pinning, fetch() would re-resolve DNS
+ * independently after this check, and an attacker controlling the DNS
+ * response could rebind the hostname to a private address in between.
+ *
+ * Return contract, unchanged from before: `{ address }` = verified public,
+ * `null` = DNS lookup failed (soft-fail — the model's web search can still
+ * discover the brand without a direct website snapshot), throws
+ * UnsafeWebsiteError = definitively unsafe.
+ */
+export async function assertPublicWebsiteUrl(
+  value: string,
+): Promise<{ address: string } | null> {
   const url = new URL(value);
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new UnsafeWebsiteError("Website URL must use http or https.");
@@ -87,7 +56,7 @@ export async function assertPublicWebsiteUrl(value: string) {
     if (isPrivateAddress(hostname)) {
       throw new UnsafeWebsiteError("Use a public company website URL.");
     }
-    return true;
+    return { address: hostname };
   }
 
   try {
@@ -98,12 +67,10 @@ export async function assertPublicWebsiteUrl(value: string) {
     ) {
       throw new UnsafeWebsiteError("Use a public company website URL.");
     }
-    return true;
+    return { address: addresses[0].address };
   } catch (error) {
     if (error instanceof UnsafeWebsiteError) throw error;
-    // DNS can be unavailable transiently. The model's web search can still
-    // discover the brand without a direct website snapshot.
-    return false;
+    return null;
   }
 }
 
@@ -165,47 +132,79 @@ export function extractWebsiteSnapshot(
   };
 }
 
+type FetchOutcome =
+  | { kind: "redirect"; location: string }
+  | { kind: "snapshot"; snapshot: WebsiteSnapshot }
+  | { kind: "abort" };
+
 export async function readPublicWebsite(
   websiteUrl: string,
 ): Promise<WebsiteSnapshot | null> {
   let currentUrl = websiteUrl;
 
   for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
-    if (!(await assertPublicWebsiteUrl(currentUrl))) return null;
+    // Re-validated and re-pinned on every hop: a redirect can point anywhere,
+    // including back into a private network.
+    const validated = await assertPublicWebsiteUrl(currentUrl);
+    if (!validated) return null;
 
-    let response: Response;
+    const hopUrl = currentUrl;
+    let outcome: FetchOutcome;
     try {
-      response = await fetch(currentUrl, {
-        redirect: "manual",
-        headers: {
-          Accept: "text/html,application/xhtml+xml",
-          "User-Agent":
-            "Voquarn-GEO/1.0 (+brand research; contact the site owner for access questions)",
+      outcome = await fetchPinned(
+        hopUrl,
+        validated.address,
+        {
+          redirect: "manual",
+          headers: {
+            Accept: "text/html,application/xhtml+xml",
+            "User-Agent":
+              "Voquarn-GEO/1.0 (+brand research; contact the site owner for access questions)",
+          },
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         },
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      });
+        async (response): Promise<FetchOutcome> => {
+          if (response.status >= 300 && response.status < 400) {
+            const location = response.headers.get("location");
+            if (!location) return { kind: "abort" };
+            return {
+              kind: "redirect",
+              location: new URL(location, hopUrl).toString(),
+            };
+          }
+
+          if (!response.ok) return { kind: "abort" };
+
+          const contentType = response.headers
+            .get("content-type")
+            ?.toLowerCase();
+          if (contentType && !contentType.includes("text/html")) {
+            return { kind: "abort" };
+          }
+
+          const contentLength = Number(response.headers.get("content-length"));
+          if (
+            Number.isFinite(contentLength) &&
+            contentLength > MAX_HTML_BYTES
+          ) {
+            return { kind: "abort" };
+          }
+
+          const html = (await response.text()).slice(0, MAX_HTML_BYTES);
+          return {
+            kind: "snapshot",
+            snapshot: extractWebsiteSnapshot(html, hopUrl),
+          };
+        },
+      );
     } catch {
       return null;
     }
 
-    if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get("location");
-      if (!location || redirect === MAX_REDIRECTS) return null;
-      currentUrl = new URL(location, currentUrl).toString();
-      continue;
-    }
-
-    if (!response.ok) return null;
-    const contentType = response.headers.get("content-type")?.toLowerCase();
-    if (contentType && !contentType.includes("text/html")) return null;
-
-    const contentLength = Number(response.headers.get("content-length"));
-    if (Number.isFinite(contentLength) && contentLength > MAX_HTML_BYTES) {
-      return null;
-    }
-
-    const html = (await response.text()).slice(0, MAX_HTML_BYTES);
-    return extractWebsiteSnapshot(html, currentUrl);
+    if (outcome.kind === "abort") return null;
+    if (outcome.kind === "snapshot") return outcome.snapshot;
+    if (redirect === MAX_REDIRECTS) return null;
+    currentUrl = outcome.location;
   }
 
   return null;

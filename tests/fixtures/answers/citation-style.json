@@ -1,0 +1,13 @@
+{
+  "id": "citation-style",
+  "description": "Markdown-style citation formatting must not break word-boundary matching",
+  "answerText": "You can read more on the official site ([Voquarn](https://voquarn.com)), which covers AI visibility tracking in detail.",
+  "brandAliases": ["Voquarn"],
+  "competitors": [],
+  "expected": {
+    "brandMentioned": true,
+    "mentionCount": 1,
+    "refused": false,
+    "competitorMentions": {}
+  }
+}

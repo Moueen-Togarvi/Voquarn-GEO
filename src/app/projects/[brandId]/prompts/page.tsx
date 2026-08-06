@@ -1,10 +1,21 @@
-import { FileQuestion } from "lucide-react";
-import { FeatureEmptyState } from "@/components/feature-empty-state";
+import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
+import { PromptTable } from "@/components/prompt-table";
+import { requireWorkspaceContext } from "@/lib/auth/context";
+import { getBrand } from "@/lib/brands/service";
 
 export const metadata = { title: "Prompts" };
 
-export default function PromptsPage() {
+export default async function PromptsPage({
+  params,
+}: {
+  params: Promise<{ brandId: string }>;
+}) {
+  const { brandId } = await params;
+  const ctx = await requireWorkspaceContext();
+  const brand = await getBrand(ctx, brandId);
+  if (!brand) notFound();
+
   return (
     <div className="page-container">
       <PageHeader
@@ -12,16 +23,9 @@ export default function PromptsPage() {
         title="Prompts"
         description="The buyer questions that determine where your brand appears in AI answers."
       />
-      <FeatureEmptyState
-        icon={FileQuestion}
-        title="Your prompt library comes next"
-        description="GLM-5.1 will generate a balanced set of category, comparison, use-case, and brand-specific questions for your approval."
-        points={[
-          "Generate 20–30 realistic buyer questions",
-          "Edit, disable, or add your own prompts",
-          "Keep every prompt grouped by buyer intent",
-        ]}
-      />
+      <div className="content-card">
+        <PromptTable brandId={brand.id} />
+      </div>
     </div>
   );
 }

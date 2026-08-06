@@ -36,93 +36,587 @@ enum Sentiment {
   NEGATIVE
 }
 
+enum PromptSource {
+  AI_GENERATED
+  USER_ADDED
+}
+
+enum BrandStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum CompetitorSource {
+  AI_DISCOVERED
+  SERP_DISCOVERED
+  USER_ADDED
+}
+
+enum CompetitorStatus {
+  CANDIDATE
+  ACCEPTED
+  IGNORED
+  PINNED
+}
+
+// One entry per phase deliverable in docs/events.md. Extending this list is
+// cheap (ALTER TYPE ... ADD VALUE); reusing BRAND_DISCOVERY for both onboarding
+// and re-analysis is deliberate, not an omission.
+enum OperationKind {
+  BRAND_DISCOVERY
+  PROMPT_GENERATION
+  BENCHMARK_BATCH
+  SERP_HUNT
+  THREAT_SCORE
+  CRAWL
+  OPPORTUNITY_DETECT
+  CONTENT_BRIEF
+  CONTENT_DRAFT
+  PUBLICATION
+  GSC_IMPORT
+  WEEKLY_REPORT
+}
+
+// PARTIAL is a real outcome, not a failure — see docs/events.md.
+enum OperationStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  PARTIAL
+  FAILED
+  CANCELLED
+}
+
+// Mirrors the provider contracts in docs/adr/0003-provider-abstraction.md.
+enum ProviderCapability {
+  GENERATION
+  BENCHMARK
+  SERP
+  KEYWORDS
+  BACKLINKS
+  CRAWL
+  ANALYTICS
+  PUBLISHING
+  NOTIFICATION
+}
+
+enum StorageDriver {
+  DB
+  S3
+}
+
+enum RetentionClass {
+  STANDARD
+  EXTENDED
+  LEGAL_HOLD
+}
+
+enum MarketDevice {
+  DESKTOP
+  MOBILE
+}
+
+enum SiteVerificationMethod {
+  DNS_TXT
+  HTML_FILE
+  GSC_OAUTH
+}
+
+enum KeywordIntent {
+  INFORMATIONAL
+  COMMERCIAL
+  TRANSACTIONAL
+  NAVIGATIONAL
+}
+
+enum ProjectKeywordPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ProjectKeywordStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum GoalType {
+  INCREASE_AI_VISIBILITY
+  INCREASE_ORGANIC_TRAFFIC
+  IMPROVE_SHARE_OF_VOICE
+  OUTRANK_COMPETITOR
+  OTHER
+}
+
+// Values are written by our own code only (Member.role, Invitation.role via
+// the organization plugin's `roles`/`creatorRole` options in
+// src/lib/auth/server.ts) — Better Auth never writes a role value we didn't
+// configure, unlike Invitation.status below, so a strict enum is safe here.
+enum MemberRole {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+// Better Auth's organization plugin maps onto this table (schema.organization
+// .modelName = "workspace" in src/lib/auth/server.ts) rather than creating a
+// separate `organization` table — see docs/adr/0002-auth-better-auth.md.
+// `logo` and `metadata` are required by that mapping; `metadata` stores a
+// JSON string, matching the plugin's own dual object/string input handling.
 model Workspace {
   id        String   @id @default(cuid())
   name      String
   slug      String   @unique
+  logo      String?
+  metadata  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   brands Brand[]
+
+  // Direct, workspace-scoped access to every tenant-owned table. Populated
+  // alongside the Brand-scoped relations above so a service can filter by
+  // workspaceId without a join through Brand — see src/lib/db/scoped.ts.
+  competitors         Competitor[]
+  prompts             Prompt[]
+  analysisBatches     AnalysisBatch[]
+  promptRuns          PromptRun[]
+  runAnalyses         RunAnalysis[]
+  benchmarkAggregates BenchmarkAggregate[]
+  sources             Source[]
+
+  operations    Operation[]
+  providerCalls ProviderCall[]
+  rawSnapshots  RawSnapshot[]
+  usageEvents   UsageEvent[]
+  auditEvents   AuditEvent[]
+  featureFlags  FeatureFlag[]
+  entitlement   Entitlement?
+
+  members     Member[]
+  invitations Invitation[]
+
+  markets         Market[]
+  sites           Site[]
+  topics          Topic[]
+  keywords        Keyword[]
+  projectKeywords ProjectKeyword[]
+  goals           Goal[]
+  voiceProfiles   BrandVoiceProfile[]
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  name          String
+  image         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions    Session[]
+  accounts    Account[]
+  members     Member[]
+  invitations Invitation[]
+  operations  Operation[]
+  auditEvents AuditEvent[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Set by the organization plugin so a session remembers which workspace is
+  // active without a client-supplied header. Null before a user has any
+  // workspace, or if the previously active one was deleted.
+  activeOrganizationId String?
+
+  @@index([userId])
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  providerId            String
+  accountId             String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  /// Only set for the credential (email+password) provider.
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+}
+
+model Member {
+  id        String     @id @default(cuid())
+  role      MemberRole
+  createdAt DateTime   @default(now())
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+}
+
+/// status is Better Auth's own internal state machine ("pending" | "accepted"
+/// | "rejected" | "canceled", written directly by its route handlers) — kept
+/// as a plain string rather than a Prisma enum so we never fight a value it
+/// writes that we don't control.
+model Invitation {
+  id        String     @id @default(cuid())
+  email     String
+  role      MemberRole
+  status    String     @default("pending")
+  expiresAt DateTime
+  createdAt DateTime   @default(now())
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  inviterId String
+  inviter   User   @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([email])
 }
 
 model Brand {
-  id          String   @id @default(cuid())
+  id          String      @id @default(cuid())
   name        String
   websiteUrl  String
   domain      String
   description String
   category    String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  status      BrandStatus @default(ACTIVE)
+  // IANA tz, e.g. "America/New_York" — distinct from Market.timezone, which
+  // is where the audience is; this is where the team running the project is.
+  timezone    String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  competitors Competitor[]
-  prompts     Prompt[]
-  batches     AnalysisBatch[]
+  defaultMarketId String?
+  defaultMarket   Market? @relation(fields: [defaultMarketId], references: [id], onDelete: SetNull)
+
+  competitors     Competitor[]
+  prompts         Prompt[]
+  batches         AnalysisBatch[]
+  operations      Operation[]
+  sites           Site[]
+  topics          Topic[]
+  goals           Goal[]
+  projectKeywords ProjectKeyword[]
+  voiceProfile    BrandVoiceProfile?
 
   @@unique([workspaceId, domain])
   @@index([workspaceId, updatedAt])
+  @@index([defaultMarketId])
 }
 
 model Competitor {
-  id         String   @id @default(cuid())
-  name       String
-  websiteUrl String
-  domain     String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id          String           @id @default(cuid())
+  name        String
+  websiteUrl  String
+  domain      String
+  source      CompetitorSource @default(AI_DISCOVERED)
+  status      CompetitorStatus @default(ACCEPTED)
+  firstSeenAt DateTime         @default(now())
+  acceptedAt  DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
   brandId String
   brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([brandId, domain])
   @@index([brandId])
+  @@index([workspaceId])
 }
 
-model Prompt {
-  id        String     @id @default(cuid())
-  text      String
-  type      PromptType
-  isActive  Boolean    @default(true)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+// Reusable within a workspace — "US, English, Desktop" is one value object
+// that several projects can share, referenced via Brand.defaultMarketId and
+// Keyword.marketId. Not owned by a single Brand.
+model Market {
+  id        String       @id @default(cuid())
+  country   String
+  region    String?
+  city      String?
+  language  String
+  device    MarketDevice @default(DESKTOP)
+  // IANA tz — where the audience is, for scheduling and reporting windows.
+  timezone  String
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  defaultForBrands Brand[]
+  keywords         Keyword[]
+  prompts          Prompt[]
+  batches          AnalysisBatch[]
+
+  @@unique([workspaceId, country, region, city, language, device])
+  @@index([workspaceId])
+}
+
+// GSC properties, WordPress connections, and crawl targets (Phase 4+) attach
+// to a Site, not a Brand directly — a project can eventually span more than
+// one verified domain (e.g. a marketing site and a docs subdomain).
+model Site {
+  id                 String                  @id @default(cuid())
+  domain             String
+  verified           Boolean                 @default(false)
+  verificationMethod SiteVerificationMethod?
+  gscSiteUrl         String?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
 
   brandId String
   brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([brandId, domain])
+  @@index([workspaceId])
+}
+
+model Topic {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  keywords Keyword[]
+
+  @@unique([brandId, name])
+  @@index([workspaceId])
+}
+
+// Scoped to a Market, not a Brand: the same keyword text has different
+// volume/competition per market, but is the same underlying search term
+// across every project that tracks it — Phase 3's SERP snapshot caching
+// keys off (Keyword, Market), not per-project, so two projects targeting the
+// same market never pay to fetch the same SERP twice. ProjectKeyword is the
+// per-project join.
+model Keyword {
+  id         String         @id @default(cuid())
+  text       String
+  normalized String
+  intent     KeywordIntent?
+  createdAt  DateTime       @default(now())
+
+  marketId String
+  market   Market @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  topicId String?
+  topic   Topic?  @relation(fields: [topicId], references: [id], onDelete: SetNull)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  projectKeywords ProjectKeyword[]
+
+  @@unique([marketId, normalized])
+  @@index([workspaceId])
+  @@index([topicId])
+}
+
+model ProjectKeyword {
+  id        String                 @id @default(cuid())
+  priority  ProjectKeywordPriority @default(MEDIUM)
+  status    ProjectKeywordStatus   @default(ACTIVE)
+  createdAt DateTime               @default(now())
+
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  keywordId String
+  keyword   Keyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([brandId, keywordId])
+  @@index([workspaceId])
+  @@index([keywordId])
+}
+
+model Goal {
+  id          String   @id @default(cuid())
+  type        GoalType
+  targetValue Decimal? @db.Decimal(12, 2)
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([brandId])
+}
+
+// One per Brand. Only the free-text fields a human can review and approve
+// exist today; approved writing samples (the actual generation input for
+// Phase 6) are a distinct, larger surface deferred until content generation
+// needs them.
+model BrandVoiceProfile {
+  id         String   @id @default(cuid())
+  tone       String?
+  audience   String?
+  guidelines String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  brandId String @unique
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+// aliasSet is nullable and unpopulated by any UI in Phase 2 — a human-reviewed
+// list of extra alias strings (abbreviations, misspellings) for this prompt's
+// brand-matching, layered on top of Brand.name/Competitor.name in
+// analyzeAnswer(). Reserved column now so it doesn't need its own migration
+// later; see docs/benchmark-protocol.md.
+model Prompt {
+  id         String       @id @default(cuid())
+  text       String
+  type       PromptType
+  source     PromptSource @default(AI_GENERATED)
+  isActive   Boolean      @default(true)
+  // Set the first time a human saves an edit or explicitly approves the
+  // prompt — never on creation for AI_GENERATED prompts, always on creation
+  // for USER_ADDED ones (a human typed it, so it is already reviewed).
+  approvedAt DateTime?
+  aliasSet   Json?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  // Prompts are phrased in the market's language, so every prompt belongs to
+  // exactly one market — generation always runs against Brand.defaultMarketId.
+  marketId String
+  market   Market @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   runs PromptRun[]
 
   @@unique([brandId, text])
   @@index([brandId, isActive])
+  @@index([workspaceId])
+  @@index([marketId])
 }
 
+// See docs/benchmark-protocol.md for what each pinned field means and why a
+// rerun must never overwrite a prior batch's rows.
 model AnalysisBatch {
-  id             String      @id @default(cuid())
-  status         BatchStatus @default(PENDING)
-  totalRuns      Int         @default(0)
-  completedRuns  Int         @default(0)
-  failedRuns     Int         @default(0)
-  startedAt      DateTime?
-  completedAt    DateTime?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  id                String      @id @default(cuid())
+  status            BatchStatus @default(PENDING)
+  totalRuns         Int         @default(0)
+  completedRuns     Int         @default(0)
+  failedRuns        Int         @default(0)
+  // How many samples per (prompt, provider, model) — PromptRun.repetitionIndex
+  // ranges [0, repetitions).
+  repetitions       Int         @default(1)
+  // sha256 of the sorted (id, text) pairs of every prompt included in this
+  // batch, computed at creation time — see computePromptSetHash() in
+  // src/lib/benchmark/service.ts. A prompt edit changes this, which is the
+  // point: it marks history before/after as non-comparable.
+  promptSetHash     String
+  extractionVersion String
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 
   brandId String
   brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
-  runs PromptRun[]
+  marketId String
+  market   Market @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  operationId String    @unique
+  operation   Operation @relation(fields: [operationId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  runs      PromptRun[]
+  aggregate BenchmarkAggregate?
 
   @@index([brandId, createdAt])
   @@index([status])
+  @@index([workspaceId])
+  @@index([marketId])
 }
 
 model PromptRun {
   id                String    @id @default(cuid())
   provider          String
   model             String
+  providerVersion   String?
+  // Distinguishes repeated samples of the same (batch, prompt, provider,
+  // model) — required for variance/confidence-interval reporting. See
+  // docs/benchmark-protocol.md.
+  repetitionIndex   Int       @default(0)
+  locale            String?
   status            RunStatus @default(PENDING)
   providerRequestId String?
   responseText      String?
@@ -143,28 +637,98 @@ model PromptRun {
   promptId String
   prompt   Prompt @relation(fields: [promptId], references: [id], onDelete: Cascade)
 
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  providerCallId String?
+  providerCall   ProviderCall? @relation(fields: [providerCallId], references: [id], onDelete: SetNull)
+
+  rawSnapshotId String?
+  rawSnapshot   RawSnapshot? @relation(fields: [rawSnapshotId], references: [id], onDelete: SetNull)
+
   analysis RunAnalysis?
   sources  Source[]
 
-  @@unique([batchId, promptId, provider, model])
+  @@unique([batchId, promptId, provider, model, repetitionIndex])
   @@index([batchId, status])
   @@index([promptId])
+  @@index([workspaceId])
+  @@index([providerCallId])
 }
 
+// Produced by the pure analyzeAnswer() extractor plus one sentiment judge
+// call — see docs/benchmark-protocol.md for why extraction itself must stay
+// deterministic. One row per PromptRun, never mutated after creation except
+// by a reprocessing pass that bumps extractionVersion.
 model RunAnalysis {
-  id                 String    @id @default(cuid())
-  brandMentioned     Boolean
-  position           Int?
-  sentiment          Sentiment
-  competitorMentions Json
-  rawResult           Json?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  id                    String    @id @default(cuid())
+  brandMentioned        Boolean
+  mentionCount          Int       @default(0)
+  firstMentionCharIndex Int?
+  position              Int?
+  sentiment             Sentiment @default(NEUTRAL)
+  // A refusal is its own bucket — neither a failure nor a non-mention. See
+  // docs/benchmark-protocol.md.
+  refused               Boolean   @default(false)
+  confidence            Float     @default(1)
+  extractionVersion     String
+  competitorMentions    Json
+  rawResult             Json?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   promptRunId String    @unique
   promptRun   PromptRun @relation(fields: [promptRunId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
 }
 
+// One stored row per batch, not a view — a rerun creates a new observation
+// set and a new aggregate; nothing is ever recomputed in place. See A2 in
+// the implementation plan and docs/benchmark-protocol.md.
+model BenchmarkAggregate {
+  id            String   @id @default(cuid())
+  visibility    Float?
+  shareOfVoice  Float?
+  avgPosition   Float?
+  sentimentDist Json
+  sampleSize    Int
+  refusedCount  Int
+  failedCount   Int
+  computedAt    DateTime @default(now())
+
+  batchId String        @unique
+  batch   AnalysisBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+// A global catalog, not tenant data — no workspaceId, never passed through
+// scopedDb(). Unpopulated until Expansion C (multi-provider AI visibility)
+// needs to surface version drift in reports; the column shape is reserved
+// now so that phase doesn't need its own migration for it.
+model ProviderModelVersion {
+  id           String    @id @default(cuid())
+  provider     String
+  model        String
+  version      String
+  pinnedAt     DateTime  @default(now())
+  deprecatedAt DateTime?
+
+  @@unique([provider, model, version])
+}
+
+// Anchored to whichever produced it: a PromptRun (Phase 2 benchmark runs) or
+// directly a ProviderCall (every other generation call, starting with brand
+// discovery in Phase 1a, which has no PromptRun to attach to). Application
+// code must set at least one — Prisma has no schema-level "at least one of"
+// constraint for this.
 model Source {
   id            String   @id @default(cuid())
   url           String
@@ -176,10 +740,205 @@ model Source {
   isCitation    Boolean  @default(false)
   createdAt     DateTime @default(now())
 
-  promptRunId String    
-  promptRun   PromptRun @relation(fields: [promptRunId], references: [id], onDelete: Cascade)
+  promptRunId String?
+  promptRun   PromptRun? @relation(fields: [promptRunId], references: [id], onDelete: Cascade)
+
+  providerCallId String?
+  providerCall   ProviderCall? @relation(fields: [providerCallId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([promptRunId, url])
   @@index([domain])
   @@index([promptRunId])
+  @@index([providerCallId])
+  @@index([workspaceId])
+}
+
+// The user-facing unit of long-running work. Route handlers create one and
+// return 202 with its id; Inngest functions advance it. See
+// docs/adr/0006-workflows-and-operations.md.
+model Operation {
+  id              String          @id @default(cuid())
+  kind            OperationKind
+  status          OperationStatus @default(PENDING)
+  progressCurrent Int             @default(0)
+  progressTotal   Int             @default(0)
+  idempotencyKey  String          @unique
+  inngestRunId    String?
+  errorCode       String?
+  errorMessage    String?
+  metadata        Json?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  // Nullable: a create-brand operation has no brand until discovery persists
+  // one. Set once the row exists.
+  brandId String?
+  brand   Brand?  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  // SetNull, not Cascade: an Operation is a historical record and must
+  // survive the actor's account being deleted later (Phase 8).
+  actorUserId String?
+  actor       User?   @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  providerCalls ProviderCall[]
+  usageEvents   UsageEvent[]
+  batch         AnalysisBatch?
+
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, status])
+  @@index([brandId])
+}
+
+// Every external provider request, regardless of phase. Written exclusively
+// by src/lib/providers/instrument.ts — adapters never write this table
+// themselves. See docs/adr/0003-provider-abstraction.md.
+model ProviderCall {
+  id              String             @id @default(cuid())
+  capability      ProviderCapability
+  provider        String
+  providerVersion String?
+  requestId       String?
+  status          RunStatus          @default(PENDING)
+  requestedAt     DateTime
+  completedAt     DateTime?
+  httpStatus      Int?
+  costUnits       Decimal?           @db.Decimal(12, 6)
+  currency        String?
+  inputTokens     Int?
+  outputTokens    Int?
+  errorCode       String?
+  errorMessage    String?
+  createdAt       DateTime           @default(now())
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  operationId String?
+  operation   Operation? @relation(fields: [operationId], references: [id], onDelete: SetNull)
+
+  rawSnapshotId String?
+  rawSnapshot   RawSnapshot? @relation(fields: [rawSnapshotId], references: [id], onDelete: SetNull)
+
+  promptRuns PromptRun[]
+  sources    Source[]
+
+  @@index([workspaceId, provider, createdAt])
+  @@index([operationId])
+}
+
+// Content-addressed, immutable. Small payloads (<256KB) live in
+// RawSnapshotBlob; larger ones (from Phase 4 onward) live in R2 and this row
+// only carries the pointer. See docs/adr/0005-storage-and-snapshots.md.
+model RawSnapshot {
+  id             String         @id @default(cuid())
+  driver         StorageDriver
+  objectKey      String
+  sha256         String
+  mimeType       String
+  byteSize       Int
+  retentionClass RetentionClass @default(STANDARD)
+  expiresAt      DateTime?
+  createdAt      DateTime       @default(now())
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  blob          RawSnapshotBlob?
+  providerCalls ProviderCall[]
+  promptRuns    PromptRun[]
+
+  @@unique([workspaceId, sha256])
+  @@index([workspaceId, createdAt])
+}
+
+model RawSnapshotBlob {
+  id        String   @id @default(cuid())
+  bytes     Bytes
+  createdAt DateTime @default(now())
+
+  snapshotId String      @unique
+  snapshot   RawSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+}
+
+// The source of truth for entitlement enforcement. Stripe (Phase 8) posts
+// meter events for invoicing only — it never gates access.
+model UsageEvent {
+  id             String   @id @default(cuid())
+  meter          String
+  quantity       Decimal  @db.Decimal(14, 4)
+  idempotencyKey String   @unique
+  occurredAt     DateTime @default(now())
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  operationId String?
+  operation   Operation? @relation(fields: [operationId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, meter, occurredAt])
+}
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  action     String
+  targetType String
+  targetId   String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  // SetNull, not Cascade: an audit trail must outlive the actor's account.
+  actorUserId String?
+  actor       User?   @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, targetType, targetId])
+}
+
+// Optional per-workspace override. Absence of a row means "use the code
+// defaults in src/lib/usage/entitlements.ts" — most workspaces never need one.
+model Entitlement {
+  id        String   @id @default(cuid())
+  plan      String   @default("beta")
+  limits    Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspaceId String    @unique
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+// Absence of a row means "use the code default in src/lib/flags.ts". There is
+// no global-only row by design — see docs/adr/0007.
+model FeatureFlag {
+  id        String   @id @default(cuid())
+  key       String
+  enabled   Boolean  @default(false)
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, key])
+}
+
+// A fixed-window token bucket. One row per (route-class, subject) pair; see
+// src/lib/api/rate-limit.ts.
+model RateLimitBucket {
+  key         String   @id
+  windowStart DateTime
+  count       Int      @default(0)
+  updatedAt   DateTime @updatedAt
 }
