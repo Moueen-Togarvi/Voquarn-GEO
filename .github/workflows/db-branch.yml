@@ -32,7 +32,7 @@ jobs:
     if: needs.configured.outputs.ready == 'true' && github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Create Neon branch
         id: branch
