@@ -1,0 +1,23 @@
+{
+  "id": "weak",
+  "description": "A generic, unsupported, padded draft that never gets specific.",
+  "title": "How to Diagnose a Widget Overload in Under 5 Minutes",
+  "brandName": "Acme Widgets",
+  "brandTone": "Direct, practical, no fluff — written for busy operators.",
+  "outline": [
+    {
+      "heading": "Symptoms of overload",
+      "coverageGoal": "List the 3 warning signs"
+    },
+    {
+      "heading": "The fix",
+      "coverageGoal": "Give the exact steps to resolve it"
+    }
+  ],
+  "plainText": "Symptoms of overload\nWidgets can overload for many reasons. It is important to pay attention to your widget and notice if something seems wrong. Many experts agree that overload is a common issue in the industry today.\n\nThe fix\nThere are many ways to fix a widget. You should try different things and see what works best for your situation. Everyone's widget is different so results may vary.",
+  "expectedRanges": {
+    "evidenceCoverage": [0, 0.3],
+    "completeness": [0, 0.4],
+    "originalContribution": [0, 0.3]
+  }
+}

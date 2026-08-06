@@ -6,6 +6,8 @@ export type EntitlementLimits = {
   brands: number;
   /** Total PromptRun rows (activePrompts × repetitions) a single benchmark batch may create — bounds provider spend per request before Stripe exists to bill for it. */
   benchmarkBatchRuns: number;
+  /** Total ContentItem rows a workspace may have — Phase 6 drafts are the most expensive per-unit LLM spend in the product (research + brief + N sections + claims + quality judge, all structured-output calls). */
+  contentDrafts: number;
 };
 
 /**
@@ -17,6 +19,7 @@ export type EntitlementLimits = {
 const DEFAULT_LIMITS: EntitlementLimits = {
   brands: 3,
   benchmarkBatchRuns: 150,
+  contentDrafts: 25,
 };
 
 export async function getEntitlementLimits(

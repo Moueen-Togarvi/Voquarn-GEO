@@ -10,7 +10,7 @@ env:
 
 jobs:
   eval:
-    name: Extraction eval
+    name: Extraction and quality-judge eval
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,3 +20,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run eval:extraction
+      # The live-judge half of eval:quality self-skips without ZAI_API_KEY
+      # (see tests/eval/quality-judge.eval.test.ts) rather than failing —
+      # same "skip, don't fail red, when unconfigured" posture as
+      # db-branch.yml's Neon secrets check.
+      - run: npm run eval:quality
+        env:
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}

@@ -1,0 +1,24 @@
+{
+  "id": "strong",
+  "description": "A well-sourced, on-brand, complete draft with no padding.",
+  "title": "How to Diagnose a Widget Overload in Under 5 Minutes",
+  "brandName": "Acme Widgets",
+  "brandTone": "Direct, practical, no fluff — written for busy operators.",
+  "outline": [
+    {
+      "heading": "Symptoms of overload",
+      "coverageGoal": "List the 3 warning signs"
+    },
+    {
+      "heading": "The fix",
+      "coverageGoal": "Give the exact steps to resolve it"
+    }
+  ],
+  "plainText": "Symptoms of overload\nWidgets show three warning signs before failing: a rising fan noise, a blinking amber light, and a 15% drop in throughput according to our own telemetry data across 4,200 monitored units. If you see any of these, stop the unit within 10 minutes to avoid permanent damage.\n\nThe fix\nFirst, power down the widget and let it cool for 5 minutes. Then check the intake vents for dust buildup — this alone resolves the issue in about 70% of support tickets we receive. If the problem persists, replace the fan filter, which is a $12 part available from our parts page.",
+  "expectedRanges": {
+    "intentSatisfaction": [0.6, 1],
+    "evidenceCoverage": [0.5, 1],
+    "completeness": [0.5, 1],
+    "policyCompliance": [0.8, 1]
+  }
+}

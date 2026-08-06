@@ -1,10 +1,11 @@
-import type {
-  GenerateJsonInput,
-  GenerateTextInput,
-  LlmMessage,
-  LlmProvider,
-  LlmResult,
-  LlmSource,
+import {
+  StructuredParseError,
+  type GenerateJsonInput,
+  type GenerateTextInput,
+  type LlmMessage,
+  type LlmProvider,
+  type LlmResult,
+  type LlmSource,
 } from "@/lib/llm/types";
 
 export const ZAI_CHAT_ENDPOINT =
@@ -108,7 +109,26 @@ export class GlmProvider implements LlmProvider {
         maxTokens: input.maxTokens,
         temperature: input.temperature,
       }),
-      (content) => input.schema.parse(JSON.parse(content) as unknown),
+      (content) => {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(content);
+        } catch (error) {
+          throw new StructuredParseError(
+            `Response was not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+            content,
+          );
+        }
+
+        const result = input.schema.safeParse(parsed);
+        if (!result.success) {
+          throw new StructuredParseError(
+            `Response did not match the expected schema: ${result.error.message}`,
+            content,
+          );
+        }
+        return result.data;
+      },
     );
   }
 

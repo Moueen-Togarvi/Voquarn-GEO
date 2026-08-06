@@ -20,6 +20,7 @@ import {
   DEFAULT_SENTIMENT,
 } from "@/lib/benchmark/sentiment";
 import { scopedDb } from "@/lib/db/scoped";
+import { chunk } from "@/lib/inngest/chunk";
 import { inngest } from "@/lib/inngest/client";
 import {
   benchmarkBatchCompleted,
@@ -265,14 +266,6 @@ export const benchmarkRunExecute = inngest.createFunction(
 );
 
 const FANOUT_CHUNK_SIZE = 8;
-
-function chunk<T>(items: T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let index = 0; index < items.length; index += size) {
-    chunks.push(items.slice(index, index + size));
-  }
-  return chunks;
-}
 
 /**
  * Orchestrates a batch: fans out over every PENDING PromptRun in bounded

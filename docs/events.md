@@ -48,9 +48,9 @@ Schemas live in `src/lib/inngest/events.ts` via `EventSchemas.fromZod`.
 | ------------------------------ | ------------------------------------------------ |
 | `crawl/run.requested`          | `workspaceId`, `crawlRunId`, `host`              |
 | `crawl/page.requested`         | `workspaceId`, `crawlRunId`, `url`, `host`       |
-| `opportunity/detect.requested` | `workspaceId`, `brandId`                         |
-| `content/brief.requested`      | `workspaceId`, `contentItemId`                   |
-| `content/draft.requested`      | `workspaceId`, `contentItemId`, `versionId`      |
+| `opportunity/detect.requested` | `workspaceId`, `brandId`, `operationId`          |
+| `content/brief.requested`      | `workspaceId`, `contentItemId`, `operationId`    |
+| `content/draft.requested`      | `workspaceId`, `contentItemId`, `operationId`    |
 | `publish/draft.requested`      | `workspaceId`, `publicationId`, `idempotencyKey` |
 | `report/weekly.requested`      | `workspaceId`, `brandId`, `weekStart`            |
 
@@ -93,9 +93,13 @@ silently disappear.
 | `MARKET_NOT_FOUND`      | 404    |
 | `PROMPT_NOT_FOUND`      | 404    |
 | `BATCH_NOT_FOUND`       | 404    |
+| `SITE_NOT_FOUND`        | 404    |
+| `INTEGRATION_NOT_FOUND` | 404    |
 | `OPERATION_NOT_FOUND`   | 404    |
 | `DUPLICATE_BRAND`       | 409    |
+| `CONNECTION_REVOKED`    | 409    |
 | `DISCOVERY_FAILED`      | 502    |
+| `PROVIDER_ERROR`        | 502    |
 | `AI_NOT_CONFIGURED`     | 503    |
 | `QUOTA_EXCEEDED`        | 402    |
 | `FORBIDDEN`             | 403    |
@@ -104,8 +108,7 @@ silently disappear.
 | `NO_ACTIVE_WORKSPACE`   | 404    |
 | `INTERNAL_ERROR`        | 500    |
 
-Planned — Phase 3 onward: `PROVIDER_ERROR` 502, `CONNECTION_REVOKED` 409,
-`CONTENT_BLOCKED` 422.
+Planned — Phase 4 onward: `CONTENT_BLOCKED` 422.
 
 Error messages are safe to show a user. Provider payloads, credentials, and
 stack traces go to logs, never to a response body.

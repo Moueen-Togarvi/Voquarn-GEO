@@ -99,6 +99,7 @@ enum ProviderCapability {
   ANALYTICS
   PUBLISHING
   NOTIFICATION
+  EMBEDDING
 }
 
 enum StorageDriver {
@@ -148,6 +149,135 @@ enum GoalType {
   IMPROVE_SHARE_OF_VOICE
   OUTRANK_COMPETITOR
   OTHER
+}
+
+enum SerpResultType {
+  ORGANIC
+  AI_OVERVIEW
+  PAA
+  VIDEO
+  LOCAL
+}
+
+// GOOGLE_SEARCH_CONSOLE today; future CMS connectors (Phase 7+) extend this
+// list rather than introducing a second connection model.
+enum IntegrationProvider {
+  GOOGLE_SEARCH_CONSOLE
+}
+
+enum IntegrationStatus {
+  PENDING
+  ACTIVE
+  REVOKED
+  ERROR
+}
+
+enum WebhookDeliveryStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+}
+
+enum CrawlRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  PARTIAL_FAILURE
+  FAILED
+}
+
+enum RenderMode {
+  STATIC
+  BROWSER
+}
+
+enum PerformanceSource {
+  FIELD
+  LAB
+}
+
+// See src/lib/opportunity/detectors/*.ts — one file per kind, each a pure
+// function over already-resolved evidence (own vs. competitor page coverage,
+// SERP standing, benchmark citation share). CITATION_GAP is brand-wide (per
+// competitor), not topic-scoped — see the model comment on Opportunity.
+enum OpportunityKind {
+  MISSING_COVERAGE
+  WEAK_COVERAGE
+  STALE
+  INTENT_MISMATCH
+  COMPARISON
+  CITATION_GAP
+}
+
+// NEW is the only state a detector run ever writes. Every other transition
+// is a human decision, recorded as an OpportunityDecision row that also
+// updates this field — see the model comment there.
+enum OpportunityStatus {
+  NEW
+  ACCEPTED
+  DEFERRED
+  DISMISSED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum OpportunityEvidenceKind {
+  OWN_PAGE
+  COMPETITOR_PAGE
+  SERP_OBSERVATION
+  BENCHMARK_MENTION
+  KEYWORD
+}
+
+// The full state machine from the implementation plan's Phase 6 migration.
+// PUBLISHING/PUBLISHED/MONITORING are reserved — nothing in Phase 6 drives a
+// ContentItem past APPROVED; Phase 7's publish workflow is what advances
+// them, the same "reserved slot, never fabricated" treatment as
+// PerformanceObservation.source = LAB in Phase 4.
+enum ContentState {
+  PLANNED
+  RESEARCHING
+  BRIEF_READY
+  DRAFTING
+  IN_REVIEW
+  CHANGES_REQUESTED
+  APPROVED
+  PUBLISHING
+  PUBLISHED
+  MONITORING
+  CANCELLED
+  FAILED
+  ARCHIVED
+  ROLLED_BACK
+}
+
+// "Every factual claim has a source, is explicitly marked opinion/first-party
+// input, or is removed" — OPINION/FIRST_PARTY claims are exempt from the
+// unsourced-claim blocker in src/lib/content/blockers.ts; FACTUAL is not.
+enum ClaimKind {
+  FACTUAL
+  OPINION
+  FIRST_PARTY
+}
+
+enum ClaimStatus {
+  UNRESOLVED
+  RESOLVED
+  RISKY
+}
+
+// Claims touching these categories are flagged for enhanced human review
+// regardless of sourcing — see src/lib/content/blockers.ts. Not a
+// determination of accuracy, just "this needs a careful human read."
+enum RiskCategory {
+  MEDICAL
+  LEGAL
+  FINANCIAL
+}
+
+enum ApprovalDecision {
+  APPROVED
+  CHANGES_REQUESTED
 }
 
 // Values are written by our own code only (Member.role, Invitation.role via
@@ -206,6 +336,35 @@ model Workspace {
   projectKeywords ProjectKeyword[]
   goals           Goal[]
   voiceProfiles   BrandVoiceProfile[]
+
+  serpSnapshots          SerpSnapshot[]
+  serpResults            SerpResult[]
+  competitorObservations CompetitorObservation[]
+  threatScores           ThreatScore[]
+  integrationConnections IntegrationConnection[]
+  encryptedSecrets       EncryptedSecret[]
+  webhookDeliveries      WebhookDelivery[]
+  searchPerformanceRows  SearchPerformanceRow[]
+
+  crawlRuns            CrawlRun[]
+  pageSnapshots        PageSnapshot[]
+  pageObservations     PageObservation[]
+  schemaObservations   SchemaObservation[]
+  performanceObservations PerformanceObservation[]
+
+  opportunities         Opportunity[]
+  opportunityEvidence   OpportunityEvidence[]
+  opportunityDecisions  OpportunityDecision[]
+  conquestPlans         ConquestPlan[]
+  planItems             PlanItem[]
+
+  contentItems    ContentItem[]
+  researchPackets ResearchPacket[]
+  contentVersions ContentVersion[]
+  claims          Claim[]
+  evidenceLinks   EvidenceLink[]
+  approvals       Approval[]
+  qualityScores   QualityScore[]
 }
 
 model User {
@@ -344,6 +503,10 @@ model Brand {
   goals           Goal[]
   projectKeywords ProjectKeyword[]
   voiceProfile    BrandVoiceProfile?
+  crawlRuns       CrawlRun[]
+  opportunities   Opportunity[]
+  conquestPlans   ConquestPlan[]
+  contentItems    ContentItem[]
 
   @@unique([workspaceId, domain])
   @@index([workspaceId, updatedAt])
@@ -367,6 +530,11 @@ model Competitor {
 
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  observations  CompetitorObservation[]
+  threatScores  ThreatScore[]
+  crawlRuns     CrawlRun[]
+  opportunities Opportunity[]
 
   @@unique([brandId, domain])
   @@index([brandId])
@@ -395,6 +563,7 @@ model Market {
   keywords         Keyword[]
   prompts          Prompt[]
   batches          AnalysisBatch[]
+  serpSnapshots    SerpSnapshot[]
 
   @@unique([workspaceId, country, region, city, language, device])
   @@index([workspaceId])
@@ -418,6 +587,9 @@ model Site {
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
+  integrationConnections IntegrationConnection[]
+  searchPerformanceRows  SearchPerformanceRow[]
+
   @@unique([brandId, domain])
   @@index([workspaceId])
 }
@@ -427,13 +599,22 @@ model Topic {
   name      String
   createdAt DateTime @default(now())
 
+  // vector(1536) — set via raw SQL only (Unsupported columns are excluded
+  // from the generated Client entirely; see src/lib/embeddings/service.ts).
+  // Null until src/lib/embeddings/service.ts has embedded this topic's name;
+  // the Phase-5 opportunity detectors treat a topic with no embedding yet as
+  // "not enough evidence to match pages," never as "matches nothing."
+  embedding Unsupported("vector(1536)")?
+
   brandId String
   brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  keywords Keyword[]
+  keywords      Keyword[]
+  opportunities Opportunity[]
+  contentItems  ContentItem[]
 
   @@unique([brandId, name])
   @@index([workspaceId])
@@ -461,7 +642,11 @@ model Keyword {
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  projectKeywords ProjectKeyword[]
+  projectKeywords        ProjectKeyword[]
+  serpSnapshots          SerpSnapshot[]
+  competitorObservations CompetitorObservation[]
+  opportunities          Opportunity[]
+  contentItems           ContentItem[]
 
   @@unique([marketId, normalized])
   @@index([workspaceId])
@@ -514,8 +699,15 @@ model BrandVoiceProfile {
   tone       String?
   audience   String?
   guidelines String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  // Phase 6: human-approved writing samples fed into brief/draft prompts as
+  // voice reference — an array of {text, approvedAt}. Deliberately separate
+  // from tone/audience/guidelines above: those are a human's *description*
+  // of the voice, this is *evidence* of it. Never populated by anything but
+  // an explicit human approval action — see addApprovedVoiceSample() in
+  // src/lib/brands/voice.ts.
+  approvedSamples Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   brandId String @unique
   brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
@@ -724,6 +916,756 @@ model ProviderModelVersion {
   @@unique([provider, model, version])
 }
 
+// One row per SERP fetch for a (keyword, market, device) — never overwritten;
+// a rerun creates a new snapshot so rank history is real, not a mutated
+// "latest" row. rawSnapshotId points at the raw provider JSON (immutable,
+// content-addressed — see docs/adr/0005-storage-and-snapshots.md); this row
+// is the parsed summary huntSerpFetch's cache-check reads before spending a
+// DataForSEO credit on the same (keyword, market, device) again within TTL.
+model SerpSnapshot {
+  id          String       @id @default(cuid())
+  device      MarketDevice
+  fetchedAt   DateTime     @default(now())
+  resultCount Int
+  createdAt   DateTime     @default(now())
+
+  keywordId String
+  keyword   Keyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  marketId String
+  market   Market @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  providerCallId String?
+  providerCall   ProviderCall? @relation(fields: [providerCallId], references: [id], onDelete: SetNull)
+
+  rawSnapshotId String?
+  rawSnapshot   RawSnapshot? @relation(fields: [rawSnapshotId], references: [id], onDelete: SetNull)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  results                SerpResult[]
+  competitorObservations CompetitorObservation[]
+
+  @@index([keywordId, marketId, device, fetchedAt])
+  @@index([workspaceId])
+}
+
+model SerpResult {
+  id                String         @id @default(cuid())
+  position          Int
+  url               String
+  domain            String
+  registrableDomain String
+  title             String?
+  snippet           String?
+  type              SerpResultType @default(ORGANIC)
+  createdAt         DateTime       @default(now())
+
+  snapshotId String
+  snapshot   SerpSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([snapshotId])
+  @@index([registrableDomain])
+  @@index([workspaceId])
+}
+
+// Evidence linking a competitor (or a not-yet-accepted candidate domain) to
+// one SERP appearance — this is what the "why this competitor" panel reads,
+// and what a future SERP-discovered competitor suggestion (Competitor.source
+// = SERP_DISCOVERED) is built from. competitorId is nullable because an
+// observation can exist for a domain before any human has accepted it as a
+// tracked competitor.
+model CompetitorObservation {
+  id              String   @id @default(cuid())
+  candidateDomain String
+  position        Int
+  createdAt       DateTime @default(now())
+
+  competitorId String?
+  competitor   Competitor? @relation(fields: [competitorId], references: [id], onDelete: SetNull)
+
+  snapshotId String
+  snapshot   SerpSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  keywordId String
+  keyword   Keyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([competitorId])
+  @@index([snapshotId])
+  @@index([keywordId])
+  @@index([workspaceId])
+}
+
+// A global, versioned set of scoring weights — not tenant data, same
+// treatment as ProviderModelVersion above. Recomputing under a new
+// ScoreDefinition version never overwrites scores computed under the old
+// one; both remain queryable so a score's meaning is always traceable to the
+// exact weights that produced it. See src/lib/scoring/threat-v1.ts.
+model ScoreDefinition {
+  id        String   @id @default(cuid())
+  name      String
+  version   Int
+  weights   Json
+  createdAt DateTime @default(now())
+
+  threatScores  ThreatScore[]
+  opportunities Opportunity[]
+  qualityScores QualityScore[]
+
+  @@unique([name, version])
+}
+
+model ThreatScore {
+  id            String   @id @default(cuid())
+  value         Float
+  components    Json
+  confidence    Float
+  evidenceCount Int
+  computedAt    DateTime @default(now())
+
+  competitorId String
+  competitor   Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+
+  scoreDefinitionId String
+  scoreDefinition   ScoreDefinition @relation(fields: [scoreDefinitionId], references: [id], onDelete: Restrict)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([competitorId, computedAt])
+  @@index([workspaceId])
+}
+
+// A user-authorized third-party account — Google Search Console today;
+// future WordPress/Webflow/Shopify connections (Phase 7+) reuse this same
+// shape and its capabilities matrix rather than introducing a second
+// connection model.
+model IntegrationConnection {
+  id                String              @id @default(cuid())
+  provider          IntegrationProvider
+  externalAccountId String
+  scopes            String[]
+  status            IntegrationStatus   @default(PENDING)
+  capabilities      Json
+  lastValidatedAt   DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  siteId String
+  site   Site   @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  secret EncryptedSecret?
+
+  @@unique([siteId, provider])
+  @@index([workspaceId])
+}
+
+// The refresh token (or equivalent long-lived credential) for one
+// IntegrationConnection, AES-256-GCM encrypted — see src/lib/crypto/envelope.ts.
+// Application code must never select ciphertext/iv/authTag into a DTO; only
+// the connection's own decrypt path reads them, and the decrypted value
+// lives in memory only for the duration of one provider call. keyVersion
+// supports rotating the encryption key without re-encrypting every row at
+// once — see docs/adr/0003-provider-abstraction.md's sibling secrets note.
+model EncryptedSecret {
+  id         String    @id @default(cuid())
+  ciphertext Bytes
+  iv         Bytes
+  authTag    Bytes
+  keyVersion Int
+  rotatedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  connectionId String                @unique
+  connection   IntegrationConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+// Reserved for Phase 7's CMS connectors (Expansion B) — nothing writes here
+// yet. workspaceId is nullable because a webhook receiver only learns which
+// workspace a delivery belongs to after inspecting the payload, and that
+// resolution step doesn't exist until a connector needs it.
+model WebhookDelivery {
+  id           String                @id @default(cuid())
+  provider     String
+  eventType    String
+  payload      Json
+  status       WebhookDeliveryStatus @default(RECEIVED)
+  receivedAt   DateTime              @default(now())
+  processedAt  DateTime?
+  errorMessage String?
+
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([provider, eventType])
+}
+
+// Imported from Google Search Console's Search Analytics API — see
+// src/lib/providers/gsc/import.ts. Upserted on the unique key below, so a
+// re-import of an overlapping date range (gscDailyImport re-pulls a trailing
+// window every run to catch GSC's own reporting delay) is idempotent rather
+// than creating duplicate rows.
+model SearchPerformanceRow {
+  id          String   @id @default(cuid())
+  date        DateTime @db.Date
+  query       String
+  page        String
+  clicks      Int
+  impressions Int
+  ctr         Float
+  position    Float
+  createdAt   DateTime @default(now())
+
+  siteId String
+  site   Site   @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, date, query, page])
+  @@index([workspaceId])
+  @@index([siteId, date])
+}
+
+// One crawl of one host. Anchored to whichever it's crawling — the client's
+// own site (brandId) or one competitor's (competitorId), same "at least one
+// of, enforced in application code" pattern as Source below. A recrawl is a
+// new CrawlRun, never a resumed or overwritten one.
+model CrawlRun {
+  id             String         @id @default(cuid())
+  host           String
+  status         CrawlRunStatus @default(PENDING)
+  totalPages     Int            @default(0)
+  completedPages Int            @default(0)
+  failedPages    Int            @default(0)
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  brandId String?
+  brand   Brand?  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  competitorId String?
+  competitor   Competitor? @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+
+  operationId String     @unique
+  operation   Operation  @relation(fields: [operationId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  snapshots PageSnapshot[]
+
+  @@index([workspaceId, createdAt])
+  @@index([brandId])
+  @@index([competitorId])
+}
+
+// One row per crawled URL, immutable — a recrawl creates a new PageSnapshot
+// rather than overwriting the last one, so content-change history and
+// freshness signals are real. contentHash is a cheap "did this page change
+// since last time" check without diffing full HTML.
+model PageSnapshot {
+  id           String     @id @default(cuid())
+  url          String
+  canonicalUrl String?
+  contentHash  String
+  httpStatus   Int
+  renderMode   RenderMode @default(STATIC)
+  fetchedAt    DateTime   @default(now())
+  createdAt    DateTime   @default(now())
+
+  crawlRunId String
+  crawlRun   CrawlRun @relation(fields: [crawlRunId], references: [id], onDelete: Cascade)
+
+  rawSnapshotId String?
+  rawSnapshot   RawSnapshot? @relation(fields: [rawSnapshotId], references: [id], onDelete: SetNull)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  observation PageObservation?
+  schemas     SchemaObservation[]
+  performance PerformanceObservation[]
+
+  @@index([crawlRunId])
+  @@index([url])
+  @@index([workspaceId])
+  @@index([contentHash])
+}
+
+// intent reuses KeywordIntent (informational/commercial/transactional/
+// navigational) — it's the same concept applied to a crawled page instead
+// of a tracked search term, and a page's classified intent is exactly what
+// gets compared against a keyword's intent for the Phase 5 gap detectors.
+model PageObservation {
+  id                  String         @id @default(cuid())
+  title               String?
+  description         String?
+  headings            Json
+  wordCount           Int
+  internalLinks       Int
+  externalLinks       Int
+  mediaCounts         Json
+  publishedAt         DateTime?
+  modifiedAt          DateTime?
+  freshnessConfidence Float
+  intent              KeywordIntent?
+  createdAt           DateTime       @default(now())
+
+  // vector(1536) of title+description — same raw-SQL-only treatment as
+  // Topic.embedding above. Powers the Phase-5 topic-to-page similarity match
+  // (src/lib/embeddings/service.ts#findTopicCoverage) that the opportunity
+  // detectors compare against.
+  embedding Unsupported("vector(1536)")?
+
+  snapshotId String       @unique
+  snapshot   PageSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model SchemaObservation {
+  id         String   @id @default(cuid())
+  type       String
+  valid      Boolean
+  mismatches Json
+  createdAt  DateTime @default(now())
+
+  snapshotId String
+  snapshot   PageSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([snapshotId])
+  @@index([workspaceId])
+}
+
+// FIELD (CrUX real-user data) and LAB (synthetic, e.g. PSI) are stored and
+// labelled separately, never blended into one number — see the plan's own
+// correction on this. Only FIELD is populated so far; LAB is a reserved
+// source value until a synthetic testing path exists.
+model PerformanceObservation {
+  id          String            @id @default(cuid())
+  lcp         Float?
+  inp         Float?
+  cls         Float?
+  source      PerformanceSource
+  collectedAt DateTime          @default(now())
+
+  snapshotId String
+  snapshot   PageSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([snapshotId])
+  @@index([workspaceId])
+}
+
+// Global (no workspaceId), queried through the plain db client, never
+// scopedDb() — same treatment as ScoreDefinition/ProviderModelVersion.
+// robots.txt for a host is a fact about that host, not about which
+// workspace is asking; caching it once per host instead of once per
+// (host, workspace) is both correct and the whole point of a cache.
+model RobotsCache {
+  id        String   @id @default(cuid())
+  host      String   @unique
+  body      String
+  fetchedAt DateTime @default(now())
+  expiresAt DateTime
+}
+
+// Also global, same reasoning as RobotsCache — whether example.com blocks
+// GPTBot is a fact about example.com. See src/lib/geo/ai-crawler-audit.ts.
+model AiCrawlerAccess {
+  id        String   @id @default(cuid())
+  domain    String
+  botName   String
+  allowed   Boolean
+  checkedAt DateTime @default(now())
+  evidence  String
+
+  @@unique([domain, botName])
+}
+
+// One row per detected gap. `score`/`confidence`/`components` follow the
+// same masked-weighted-sum shape as ThreatScore (src/lib/scoring/weighted.ts)
+// under their own ScoreDefinition ("opportunity-v1"), not the strategy
+// document's multiplicative formula — see A1 #2 in the implementation plan.
+// `title`/`summary`/`recommendedActions` are deterministic, generated by the
+// detector itself (src/lib/opportunity/detectors/*.ts) so the feature works
+// with no LLM configured; src/lib/opportunity/explain.ts best-effort
+// upgrades summary/recommendedActions to more natural language afterward.
+//
+// topicId/keywordId are null for CITATION_GAP, which is brand-wide evidence
+// (AI-benchmark citation share) rather than a single crawled page's gap
+// against one topic. competitorId is null only when a kind has no single
+// competitor to point at (not used by any detector yet, but the column
+// isn't forced non-null for kinds that might need it later).
+//
+// dedupeKey + the unique constraint below is what stops a dismissed
+// opportunity from being recreated the next time detection runs — see
+// src/lib/opportunity/dedupe.ts. A rerun that produces the same dedupeKey
+// is silently skipped, never upserted; recomputing a *fresher* score for an
+// existing gap is a deliberate non-goal of this version (see the comment on
+// createOpportunityIfNew in src/lib/opportunity/service.ts).
+model Opportunity {
+  id                 String            @id @default(cuid())
+  kind               OpportunityKind
+  status             OpportunityStatus @default(NEW)
+  score              Float
+  confidence         Float
+  components         Json
+  dedupeKey          String
+  title              String
+  summary            String
+  recommendedActions Json
+  detectedAt         DateTime          @default(now())
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  competitorId String?
+  competitor   Competitor? @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+
+  topicId String?
+  topic   Topic?  @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  keywordId String?
+  keyword   Keyword? @relation(fields: [keywordId], references: [id], onDelete: SetNull)
+
+  scoreDefinitionId String
+  scoreDefinition   ScoreDefinition @relation(fields: [scoreDefinitionId], references: [id], onDelete: Restrict)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  evidence     OpportunityEvidence[]
+  decisions    OpportunityDecision[]
+  planItems    PlanItem[]
+  contentItems ContentItem[]
+
+  @@unique([brandId, dedupeKey])
+  @@index([brandId, status, score])
+  @@index([workspaceId])
+}
+
+// What backs one Opportunity's detection — a specific PageSnapshot,
+// CompetitorObservation, RunAnalysis, or Keyword row. sourceTable/sourceId
+// are a loose reference (not a Prisma relation) since the source model
+// varies by evidence kind — mirrors ProviderCall's own posture toward
+// heterogeneous references elsewhere in the schema.
+model OpportunityEvidence {
+  id          String                  @id @default(cuid())
+  kind        OpportunityEvidenceKind
+  sourceTable String
+  sourceId    String
+  url         String?
+  note        String?
+  createdAt   DateTime                @default(now())
+
+  opportunityId String
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([opportunityId])
+  @@index([workspaceId])
+}
+
+// A human decision on an Opportunity — append-only history, not a mutation
+// of a single "current decision" row, so a reversed call (e.g. DISMISSED
+// then later re-ACCEPTED) stays auditable. Opportunity.status always mirrors
+// the most recent row here; see recordOpportunityDecision() in
+// src/lib/opportunity/service.ts, the only writer of both.
+model OpportunityDecision {
+  id        String            @id @default(cuid())
+  status    OpportunityStatus
+  reason    String?
+  actorId   String?
+  decidedAt DateTime          @default(now())
+
+  opportunityId String
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([opportunityId])
+  @@index([workspaceId])
+}
+
+// One per brand per ISO week (weekStart = that week's Monday, UTC midnight).
+// A thin container — PlanItem is what actually links to an Opportunity. See
+// A "1-3 recommended actions, not a forced Mon/Wed/Fri publishing quota" in
+// the implementation plan: this table holds what a human chose to work on
+// this week, not a system-generated schedule.
+model ConquestPlan {
+  id        String   @id @default(cuid())
+  weekStart DateTime
+  createdAt DateTime @default(now())
+
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  items PlanItem[]
+
+  @@unique([brandId, weekStart])
+  @@index([workspaceId])
+}
+
+model PlanItem {
+  id        String    @id @default(cuid())
+  ownerId   String?
+  dueAt     DateTime?
+  notes     String?
+  createdAt DateTime  @default(now())
+
+  planId String
+  plan   ConquestPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  opportunityId String
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, opportunityId])
+  @@index([workspaceId])
+}
+
+// The top-level content record — one per piece of content being built,
+// optionally addressing an Opportunity. Its own history (research, drafts,
+// approvals) lives in the child tables below; ContentItem itself only holds
+// current identity and state. "Latest" research packet or version is always
+// found by querying, never by a forward pointer — same convention as
+// getLatestCrawlRun/getLatestAggregate elsewhere, which avoids the circular
+// FK a "currentVersionId" column would require.
+model ContentItem {
+  id              String       @id @default(cuid())
+  title           String
+  slug            String?
+  state           ContentState @default(PLANNED)
+  targetWordCount Int?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  opportunityId String?
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+
+  topicId String?
+  topic   Topic?  @relation(fields: [topicId], references: [id], onDelete: SetNull)
+
+  keywordId String?
+  keyword   Keyword? @relation(fields: [keywordId], references: [id], onDelete: SetNull)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  researchPackets ResearchPacket[]
+  versions        ContentVersion[]
+
+  @@index([brandId, state])
+  @@index([opportunityId])
+  @@index([workspaceId])
+}
+
+// The brief IS the research packet — audience/intent/angle/outline/coverage
+// goals/evidence/first-party-inputs-needed/internal-link-candidates/
+// visual-suggestions/schema-recommendation all live here, matching the
+// implementation plan's model list exactly (it lists ResearchPacket, not a
+// separate Brief table). Append-only like SerpSnapshot/ThreatScore — a
+// re-run creates a new packet rather than overwriting; the latest one by
+// createdAt is what BRIEF_READY and drafting read.
+model ResearchPacket {
+  id                     String   @id @default(cuid())
+  audience               String?
+  intent                 String?
+  angle                  String?
+  outline                Json
+  evidence               Json
+  firstPartyInputsNeeded Json
+  internalLinkCandidates Json
+  visualSuggestions      Json
+  schemaRecommendation   String?
+  createdAt              DateTime @default(now())
+
+  contentItemId String
+  contentItem   ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([contentItemId, createdAt])
+  @@index([workspaceId])
+}
+
+// Immutable once an Approval with decision=APPROVED exists for it — any
+// further edit creates a new ContentVersion (parentVersionId pointing back)
+// rather than mutating this row. See updateDraftContent() and
+// createRevisionVersion() in src/lib/content/service.ts, the only two
+// writers of `doc`/`html`, and the acceptance test this exists to satisfy:
+// "Approved versions are immutable; edits create a new version and
+// invalidate approval."
+model ContentVersion {
+  id            String   @id @default(cuid())
+  versionNumber Int
+  // ProseMirror JSON — the editor's native format, TipTap's source of truth.
+  doc           Json
+  // Rendered HTML, denormalized for fast display and SEO checks — see
+  // src/lib/content/prosemirror.ts's renderToHtml(), the only writer.
+  html          String
+  wordCount     Int
+  createdBy     String?
+  createdAt     DateTime @default(now())
+
+  contentItemId String
+  contentItem   ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+
+  parentVersionId String?
+  parentVersion   ContentVersion?  @relation("ContentVersionHistory", fields: [parentVersionId], references: [id], onDelete: SetNull)
+  childVersions   ContentVersion[] @relation("ContentVersionHistory")
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  claims        Claim[]
+  approvals     Approval[]
+  qualityScores QualityScore[]
+
+  @@unique([contentItemId, versionNumber])
+  @@index([workspaceId])
+}
+
+// One row per claim the draft makes — extracted by an LLM call
+// (src/lib/content/claims.ts) but gated by pure, deterministic blocker
+// logic (src/lib/content/blockers.ts), per A5's "LLM proposes, pure
+// functions decide" split. FACTUAL claims with no RESOLVED status (i.e. no
+// EvidenceLink) block approval; OPINION/FIRST_PARTY do not, since they were
+// never claims that needed a source in the first place.
+model Claim {
+  id           String        @id @default(cuid())
+  text         String
+  kind         ClaimKind
+  status       ClaimStatus   @default(UNRESOLVED)
+  riskCategory RiskCategory?
+  createdAt    DateTime      @default(now())
+
+  contentVersionId String
+  contentVersion   ContentVersion @relation(fields: [contentVersionId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  evidenceLinks EvidenceLink[]
+
+  @@index([contentVersionId])
+  @@index([workspaceId])
+}
+
+// What resolves a Claim — a URL (research-packet evidence, a competitor
+// page, a first-party input) or a loose sourceTable/sourceId reference into
+// evidence already collected elsewhere (OpportunityEvidence, PageSnapshot,
+// Source), same loose-reference shape as OpportunityEvidence for the same
+// reason: the source model varies by evidence kind.
+model EvidenceLink {
+  id          String   @id @default(cuid())
+  url         String?
+  note        String?
+  sourceTable String?
+  sourceId    String?
+  createdAt   DateTime @default(now())
+
+  claimId String
+  claim   Claim  @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([claimId])
+  @@index([workspaceId])
+}
+
+// A human decision on one ContentVersion — append-only, same posture as
+// OpportunityDecision. The most recent APPROVED row for a version is what
+// makes it immutable; a later CHANGES_REQUESTED row on a *different*
+// (newer) version does not reopen an already-approved one.
+model Approval {
+  id        String           @id @default(cuid())
+  decision  ApprovalDecision
+  comment   String?
+  actorId   String?
+  decidedAt DateTime         @default(now())
+
+  contentVersionId String
+  contentVersion   ContentVersion @relation(fields: [contentVersionId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([contentVersionId])
+  @@index([workspaceId])
+}
+
+// LLM-as-judge output against a fixed rubric (src/lib/quality/judge.ts),
+// scored with the same masked-weighted-sum shape as ThreatScore/Opportunity
+// (src/lib/scoring/weighted.ts) under its own ScoreDefinition
+// ("quality-v1"). judgeVersion is separate from scoreDefinitionId: the
+// latter versions the component *weights*, the former versions the judge
+// *prompt/rubric* — a prompt change should not silently reinterpret old
+// scores as having used new weights, or vice versa. Advisory only — see
+// src/lib/content/blockers.ts for what actually gates approval; a low
+// QualityScore never blocks by itself.
+model QualityScore {
+  id           String   @id @default(cuid())
+  value        Float
+  confidence   Float
+  components   Json
+  judgeVersion String
+  computedAt   DateTime @default(now())
+
+  contentVersionId String
+  contentVersion   ContentVersion @relation(fields: [contentVersionId], references: [id], onDelete: Cascade)
+
+  scoreDefinitionId String
+  scoreDefinition   ScoreDefinition @relation(fields: [scoreDefinitionId], references: [id], onDelete: Restrict)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([contentVersionId])
+  @@index([workspaceId])
+}
+
 // Anchored to whichever produced it: a PromptRun (Phase 2 benchmark runs) or
 // directly a ProviderCall (every other generation call, starting with brand
 // discovery in Phase 1a, which has no PromptRun to attach to). Application
@@ -791,6 +1733,7 @@ model Operation {
   providerCalls ProviderCall[]
   usageEvents   UsageEvent[]
   batch         AnalysisBatch?
+  crawlRun      CrawlRun?
 
   @@index([workspaceId, createdAt])
   @@index([workspaceId, status])
@@ -827,8 +1770,9 @@ model ProviderCall {
   rawSnapshotId String?
   rawSnapshot   RawSnapshot? @relation(fields: [rawSnapshotId], references: [id], onDelete: SetNull)
 
-  promptRuns PromptRun[]
-  sources    Source[]
+  promptRuns    PromptRun[]
+  sources       Source[]
+  serpSnapshots SerpSnapshot[]
 
   @@index([workspaceId, provider, createdAt])
   @@index([operationId])
@@ -854,6 +1798,8 @@ model RawSnapshot {
   blob          RawSnapshotBlob?
   providerCalls ProviderCall[]
   promptRuns    PromptRun[]
+  serpSnapshots SerpSnapshot[]
+  pageSnapshots PageSnapshot[]
 
   @@unique([workspaceId, sha256])
   @@index([workspaceId, createdAt])

@@ -43,11 +43,16 @@ jobs:
   schema:
     name: Migration drift
     runs-on: ubuntu-latest
-    # The Prisma CLI talks to Postgres directly, so a stock container is fine
-    # here. Only the application uses the Neon driver adapter.
+    # The Prisma CLI talks to Postgres directly, so any container with the
+    # right extensions is fine here — only the application uses the Neon
+    # driver adapter. pgvector/pgvector:pg17 is stock postgres:17 plus the
+    # `vector` extension pre-installed (not pre-created — the Phase-5
+    # pgvector migration still runs `CREATE EXTENSION IF NOT EXISTS vector`),
+    # which the Phase-5 migrations need to replay cleanly. See
+    # prisma/migrations/20260807020000_phase5_pgvector.
     services:
       postgres:
-        image: postgres:17
+        image: pgvector/pgvector:pg17
         env:
           POSTGRES_PASSWORD: postgres
         options: >-

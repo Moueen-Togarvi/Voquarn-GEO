@@ -6,6 +6,7 @@ import {
   GlmProvider,
   ZAI_CHAT_ENDPOINT,
 } from "@/lib/llm/glm";
+import { StructuredParseError } from "@/lib/llm/types";
 
 describe("GLM provider foundation", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -83,5 +84,67 @@ describe("GLM provider foundation", () => {
     expect(sentBody?.tools).toBeDefined();
     expect(sentBody?.response_format).toEqual({ type: "json_object" });
     expect(result.content.category).toBe("GEO");
+  });
+
+  it("throws StructuredParseError (carrying the raw content) on malformed JSON — json_object mode gives no schema guarantee", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              choices: [{ message: { content: "not actually json" } }],
+              usage: {
+                prompt_tokens: 5,
+                completion_tokens: 3,
+                total_tokens: 8,
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          ),
+      ),
+    );
+
+    const provider = new GlmProvider("test-key");
+    const promise = provider.generateJson({
+      messages: [{ role: "user", content: "Research this company." }],
+      schema: z.object({ category: z.string() }),
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(StructuredParseError);
+    await promise.catch((error: StructuredParseError) => {
+      expect(error.rawContent).toBe("not actually json");
+    });
+  });
+
+  it("throws StructuredParseError on well-formed JSON that fails the schema", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              choices: [{ message: { content: '{"wrongField":123}' } }],
+              usage: {
+                prompt_tokens: 5,
+                completion_tokens: 3,
+                total_tokens: 8,
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          ),
+      ),
+    );
+
+    const provider = new GlmProvider("test-key");
+    const promise = provider.generateJson({
+      messages: [{ role: "user", content: "Research this company." }],
+      schema: z.object({ category: z.string() }),
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(StructuredParseError);
+    await promise.catch((error: StructuredParseError) => {
+      expect(error.rawContent).toBe('{"wrongField":123}');
+    });
   });
 });

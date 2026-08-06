@@ -3,13 +3,18 @@
 import {
   BarChart3,
   Bot,
+  CalendarCheck,
   ChevronDown,
+  FileEdit,
   FileQuestion,
+  FileText,
   Globe2,
   LogOut,
   Menu,
   Plus,
   Settings,
+  ShieldAlert,
+  Target,
   TrendingUp,
   Users,
   X,
@@ -26,6 +31,11 @@ const navItems = [
   { label: "Overview", slug: "overview", icon: BarChart3, next: false },
   { label: "Prompts", slug: "prompts", icon: FileQuestion, next: false },
   { label: "Runs", slug: "runs", icon: TrendingUp, next: false },
+  { label: "Competitors", slug: "competitors", icon: ShieldAlert, next: false },
+  { label: "Pages", slug: "pages", icon: FileText, next: false },
+  { label: "Opportunities", slug: "opportunities", icon: Target, next: false },
+  { label: "Plan", slug: "plan", icon: CalendarCheck, next: false },
+  { label: "Content", slug: "content", icon: FileEdit, next: false },
   { label: "Sources", slug: "sources", icon: Globe2, next: false },
   { label: "Models", slug: "models", icon: Bot, next: true },
 ] as const;
@@ -207,9 +217,9 @@ function NavigationContent({
           </button>
         ) : null}
         <div className="phase-card">
-          <span>Phase 2</span>
-          <strong>AI visibility measurement</strong>
-          <p>Competitor hunting is the next milestone.</p>
+          <span>Phase 6</span>
+          <strong>AUTO-BUILD</strong>
+          <p>Deploy + monitor is the next milestone.</p>
         </div>
       </div>
     </>

@@ -5,6 +5,25 @@ import type { CompetitorDto } from "@/lib/brands/types";
 import { scopedDb } from "@/lib/db/scoped";
 import { isPrismaErrorCode } from "@/lib/db/prisma-errors";
 
+export async function getCompetitor(
+  ctx: WorkspaceContext,
+  competitorId: string,
+): Promise<CompetitorDto | null> {
+  const competitor = await scopedDb(ctx).competitor.findFirst({
+    where: { id: competitorId },
+  });
+  if (!competitor) return null;
+
+  return {
+    id: competitor.id,
+    name: competitor.name,
+    websiteUrl: competitor.websiteUrl,
+    domain: competitor.domain,
+    status: competitor.status,
+    source: competitor.source,
+  };
+}
+
 /**
  * The review step's accept/ignore/pin action. `acceptedAt` is stamped only
  * on the transition into ACCEPTED, mirroring the column's own intent — it

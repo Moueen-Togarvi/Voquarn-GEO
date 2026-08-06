@@ -11,9 +11,14 @@
  * scopedDb; they're included here so any of our own code that queries them
  * directly gets the same guarantee.
  *
- * ProviderModelVersion is deliberately absent — it is a global catalog with
- * no workspaceId column, queried through the plain `db` client, never
- * scopedDb().
+ * ProviderModelVersion, ScoreDefinition, RobotsCache, and AiCrawlerAccess
+ * are deliberately absent — all four are global catalogs/caches with no
+ * workspaceId column, queried through the plain `db` client, never
+ * scopedDb(). WebhookDelivery is also absent: its workspaceId is nullable
+ * by design (a receiver may not know the workspace until it inspects the
+ * payload), and scopedDb's create-path would force a non-null value onto
+ * every row, defeating that. Nothing writes to it yet — see the model
+ * comment in schema.prisma.
  */
 export const TENANT_MODELS = new Set([
   "Brand",
@@ -40,6 +45,30 @@ export const TENANT_MODELS = new Set([
   "ProjectKeyword",
   "Goal",
   "BrandVoiceProfile",
+  "SerpSnapshot",
+  "SerpResult",
+  "CompetitorObservation",
+  "ThreatScore",
+  "IntegrationConnection",
+  "EncryptedSecret",
+  "SearchPerformanceRow",
+  "CrawlRun",
+  "PageSnapshot",
+  "PageObservation",
+  "SchemaObservation",
+  "PerformanceObservation",
+  "Opportunity",
+  "OpportunityEvidence",
+  "OpportunityDecision",
+  "ConquestPlan",
+  "PlanItem",
+  "ContentItem",
+  "ResearchPacket",
+  "ContentVersion",
+  "Claim",
+  "EvidenceLink",
+  "Approval",
+  "QualityScore",
 ]);
 
 const WHERE_SCOPED_OPERATIONS = new Set([

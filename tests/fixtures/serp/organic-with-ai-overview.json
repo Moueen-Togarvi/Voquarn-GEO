@@ -1,0 +1,76 @@
+{
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "tasks": [
+    {
+      "id": "task-1",
+      "status_code": 20000,
+      "status_message": "Ok.",
+      "result": [
+        {
+          "keyword": "best ai visibility tool",
+          "se_domain": "google.com",
+          "location_code": 2840,
+          "language_code": "en",
+          "datetime": "2026-08-06 12:00:00 +00:00",
+          "se_results_count": 12300000,
+          "items_count": 4,
+          "items": [
+            {
+              "type": "ai_overview",
+              "rank_group": 0,
+              "rank_absolute": 1,
+              "references": [
+                {
+                  "url": "https://voquarn.com/guide",
+                  "domain": "voquarn.com",
+                  "title": "AI Visibility Guide"
+                },
+                {
+                  "url": "https://market-signal.example/blog/ai-tools",
+                  "domain": "market-signal.example",
+                  "title": "Top AI Tools"
+                }
+              ]
+            },
+            {
+              "type": "organic",
+              "rank_group": 1,
+              "rank_absolute": 2,
+              "domain": "market-signal.example",
+              "title": "Market Signal — AI Visibility Platform",
+              "description": "Track your brand across AI answers.",
+              "url": "https://market-signal.example/"
+            },
+            {
+              "type": "people_also_ask",
+              "rank_group": 2,
+              "rank_absolute": 3,
+              "items": [
+                {
+                  "expanded_element": [
+                    {
+                      "url": "https://search-scope.example/faq",
+                      "domain": "search-scope.example",
+                      "title": "What is AI visibility?",
+                      "description": "AI visibility measures how often a brand is mentioned."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "organic",
+              "rank_group": 3,
+              "rank_absolute": 4,
+              "domain": "shop.example.co.uk",
+              "title": "Example UK subdomain result",
+              "description": "A multi-part-suffix domain to exercise registrableDomain().",
+              "url": "https://shop.example.co.uk/tools"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -67,3 +67,22 @@ export interface LlmProvider {
   generateText(input: GenerateTextInput): Promise<LlmResult<string>>;
   generateJson<T>(input: GenerateJsonInput<T>): Promise<LlmResult<T>>;
 }
+
+/**
+ * Thrown by a provider's generateJson() when the raw response is not valid
+ * JSON, or is valid JSON that fails the caller's Zod schema — `json_object`
+ * response-format mode gives no schema guarantee, so this is expected to
+ * happen. Carries the raw content so src/lib/llm/structured.ts can re-prompt
+ * the model with it rather than discarding the failed attempt. Still a
+ * plain Error subclass, so every existing `catch (error)` block that only
+ * checks `error instanceof Error` keeps working unchanged.
+ */
+export class StructuredParseError extends Error {
+  readonly rawContent: string;
+
+  constructor(message: string, rawContent: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "StructuredParseError";
+    this.rawContent = rawContent;
+  }
+}
