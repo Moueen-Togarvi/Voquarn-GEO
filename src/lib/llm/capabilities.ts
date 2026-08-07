@@ -7,7 +7,7 @@ import type { ProviderCapability } from "@/generated/prisma/enums";
  * caller hardcoding provider names.
  */
 const PROVIDER_CAPABILITIES: Record<string, ProviderCapability[]> = {
-  zai: ["GENERATION", "BENCHMARK"],
+  openai: ["GENERATION", "BENCHMARK"],
 };
 
 export function providerSupports(

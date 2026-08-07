@@ -151,6 +151,24 @@ export function BrandForm({ brand }: { brand?: BrandDto }) {
               <strong>{brand.category}</strong>
             </div>
           </div>
+          <div className="research-profile-grid compact">
+            {[
+              ["Products & services", brand.services],
+              ["Audiences", brand.audiences],
+              ["Pain points", brand.painPoints],
+              ["Content themes", brand.contentThemes],
+              ["Differentiators", brand.differentiators],
+            ].map(([label, items]) => (
+              <div className="research-profile-group" key={label as string}>
+                <span>{label as string}</span>
+                <ul>
+                  {(items as string[]).map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
           <div className="discovered-competitors">
             <span>Direct competitors</span>
             <div>
@@ -190,8 +208,8 @@ export function BrandForm({ brand }: { brand?: BrandDto }) {
                 {isEditing ? "Re-analyze your company" : "Add your company"}
               </h2>
               <p>
-                Only the company name and website are needed. AI discovers the
-                product, category, and closest competitors for you.
+                Only the company name and website are needed. We analyze the
+                site before researching its niche and closest competitors.
               </p>
             </div>
           </div>
@@ -235,8 +253,9 @@ export function BrandForm({ brand }: { brand?: BrandDto }) {
             <div>
               <strong>Everything else is automatic</strong>
               <p>
-                We read the site, identify the specific category, and use web
-                research to verify 2–4 direct competitors.
+                We sample service, solution, and blog/resource pages; map the
+                niche, audiences, and buyer problems; then OpenAI web search
+                verifies 2–4 direct competitors and builds AEO/GEO context.
               </p>
             </div>
           </div>

@@ -78,6 +78,11 @@ export const promptGeneration = inngest.createFunction(
             name: brand.name,
             description: brand.description,
             category: brand.category,
+            services: brand.services,
+            audiences: brand.audiences,
+            painPoints: brand.painPoints,
+            contentThemes: brand.contentThemes,
+            differentiators: brand.differentiators,
           },
           competitors: brand.competitors.map((competitor) => ({
             name: competitor.name,
@@ -102,9 +107,9 @@ export const promptGeneration = inngest.createFunction(
           };
         }
 
-        if (!process.env.ZAI_API_KEY) {
+        if (!process.env.OPENAI_API_KEY) {
           throw new NonRetriableError(
-            "Automatic prompt generation is not configured. Add ZAI_API_KEY and try again.",
+            "Automatic prompt generation is not configured. Add OPENAI_API_KEY and try again.",
           );
         }
 

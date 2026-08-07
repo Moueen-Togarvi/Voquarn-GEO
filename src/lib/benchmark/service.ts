@@ -27,7 +27,7 @@ import type { LlmMessage, LlmUsage } from "@/lib/llm/types";
 import { listActivePrompts } from "@/lib/prompts/service";
 import { getEntitlementLimits } from "@/lib/usage/entitlements";
 
-/** The generateText call a benchmark run makes — see contracts.ts: GLM's web-search generateText call IS the benchmark run itself. */
+/** OpenAI Responses web search produces the benchmark answer and citations in one provider call. */
 export function buildBenchmarkMessages(promptText: string): LlmMessage[] {
   return [
     {

@@ -148,9 +148,9 @@ export const benchmarkRunExecute = inngest.createFunction(
         if (shouldUseBenchmarkFixture()) {
           return fixtureAnswer(context.brandName, context.promptText);
         }
-        if (!process.env.ZAI_API_KEY) {
+        if (!process.env.OPENAI_API_KEY) {
           throw new NonRetriableError(
-            "Benchmark runs are not configured. Add ZAI_API_KEY and try again.",
+            "Benchmark runs are not configured. Add OPENAI_API_KEY and try again.",
           );
         }
 
@@ -197,7 +197,7 @@ export const benchmarkRunExecute = inngest.createFunction(
         if (!analysis.brandMentioned || analysis.refused) {
           return DEFAULT_SENTIMENT;
         }
-        if (shouldUseBenchmarkFixture() || !process.env.ZAI_API_KEY) {
+        if (shouldUseBenchmarkFixture() || !process.env.OPENAI_API_KEY) {
           return DEFAULT_SENTIMENT;
         }
 

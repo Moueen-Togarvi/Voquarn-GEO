@@ -118,9 +118,9 @@ export const contentBrief = inngest.createFunction(
     );
 
     const brief = await step.run("generate-brief", async () => {
-      if (!process.env.ZAI_API_KEY) {
+      if (!process.env.OPENAI_API_KEY) {
         throw new NonRetriableError(
-          "Content generation is not configured. Add ZAI_API_KEY and try again.",
+          "Content generation is not configured. Add OPENAI_API_KEY and try again.",
         );
       }
 
@@ -233,9 +233,9 @@ export const contentDraft = inngest.createFunction(
       }),
     );
 
-    if (!process.env.ZAI_API_KEY) {
+    if (!process.env.OPENAI_API_KEY) {
       throw new NonRetriableError(
-        "Content generation is not configured. Add ZAI_API_KEY and try again.",
+        "Content generation is not configured. Add OPENAI_API_KEY and try again.",
       );
     }
 

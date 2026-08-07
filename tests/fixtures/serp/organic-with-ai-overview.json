@@ -1,76 +1,58 @@
 {
-  "status_code": 20000,
-  "status_message": "Ok.",
-  "tasks": [
+  "search_parameters": {
+    "q": "best ai visibility tool",
+    "hl": "en",
+    "gl": "us",
+    "device": "desktop",
+    "start": 0
+  },
+  "search_information": {
+    "total_results": 12300000
+  },
+  "organic_results": [
     {
-      "id": "task-1",
-      "status_code": 20000,
-      "status_message": "Ok.",
-      "result": [
-        {
-          "keyword": "best ai visibility tool",
-          "se_domain": "google.com",
-          "location_code": 2840,
-          "language_code": "en",
-          "datetime": "2026-08-06 12:00:00 +00:00",
-          "se_results_count": 12300000,
-          "items_count": 4,
-          "items": [
-            {
-              "type": "ai_overview",
-              "rank_group": 0,
-              "rank_absolute": 1,
-              "references": [
-                {
-                  "url": "https://voquarn.com/guide",
-                  "domain": "voquarn.com",
-                  "title": "AI Visibility Guide"
-                },
-                {
-                  "url": "https://market-signal.example/blog/ai-tools",
-                  "domain": "market-signal.example",
-                  "title": "Top AI Tools"
-                }
-              ]
-            },
-            {
-              "type": "organic",
-              "rank_group": 1,
-              "rank_absolute": 2,
-              "domain": "market-signal.example",
-              "title": "Market Signal — AI Visibility Platform",
-              "description": "Track your brand across AI answers.",
-              "url": "https://market-signal.example/"
-            },
-            {
-              "type": "people_also_ask",
-              "rank_group": 2,
-              "rank_absolute": 3,
-              "items": [
-                {
-                  "expanded_element": [
-                    {
-                      "url": "https://search-scope.example/faq",
-                      "domain": "search-scope.example",
-                      "title": "What is AI visibility?",
-                      "description": "AI visibility measures how often a brand is mentioned."
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              "type": "organic",
-              "rank_group": 3,
-              "rank_absolute": 4,
-              "domain": "shop.example.co.uk",
-              "title": "Example UK subdomain result",
-              "description": "A multi-part-suffix domain to exercise registrableDomain().",
-              "url": "https://shop.example.co.uk/tools"
-            }
-          ]
-        }
-      ]
+      "position": 2,
+      "title": "Market Signal — AI Visibility Platform",
+      "link": "https://market-signal.example/",
+      "snippet": "Track your brand across AI answers.",
+      "source": "Market Signal"
+    },
+    {
+      "position": 4,
+      "title": "Example UK subdomain result",
+      "link": "https://shop.example.co.uk/tools",
+      "snippet": "A multi-part-suffix domain to exercise registrableDomain().",
+      "source": "Example UK"
     }
-  ]
+  ],
+  "related_questions": [
+    {
+      "question": "What is AI visibility?"
+    }
+  ],
+  "video_results": [
+    {
+      "position": 5,
+      "title": "AI visibility explained",
+      "url": "https://youtube.com/watch?v=fixture",
+      "source": "YouTube · Search Scope"
+    }
+  ],
+  "ai_overview": {
+    "state": "complete",
+    "references": [
+      {
+        "title": "AI Visibility Guide",
+        "link": "https://voquarn.com/guide",
+        "snippet": "A guide to answer-engine visibility.",
+        "source": "Voquarn"
+      },
+      {
+        "title": "Top AI Tools",
+        "link": "https://market-signal.example/blog/ai-tools",
+        "snippet": "A list of AI visibility tools.",
+        "source": "Market Signal"
+      }
+    ]
+  }
 }

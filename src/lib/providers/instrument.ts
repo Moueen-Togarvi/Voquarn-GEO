@@ -14,8 +14,8 @@ type ProviderCallSpec = {
 /**
  * Wraps a single external provider call and records a ProviderCall row for
  * it — on success or failure, with timing and, where a rate is known, cost.
- * This is the ONLY place ProviderCall rows are written; adapters (GlmProvider
- * and every future SERP/crawl/publish adapter) must never write it
+ * This is the ONLY place ProviderCall rows are written; adapters
+ * (OpenAiProvider and every future SERP/crawl/publish adapter) never write it
  * themselves, or cost and margin reporting becomes a union query across
  * inconsistent bookkeeping by the time Phase 7 needs it. See
  * docs/adr/0003-provider-abstraction.md.
@@ -103,7 +103,7 @@ export type GenericProviderCallOutcome<T> = {
  * is intentionally LLM-specific (it reads LlmResult<T>'s usage/cost/
  * requestId fields to fill in the row). This one makes no assumption about
  * the wrapped call's return shape beyond "it's the raw provider response,"
- * which is what DataForSEO's SERP client needs. Both still funnel every
+ * which is what Scrape.do's SERP client needs. Both still funnel every
  * ProviderCall write through this one file, which is the part of
  * docs/adr/0003-provider-abstraction.md that actually matters; unifying the
  * two into one generic wrapper is a reasonable cleanup once a third

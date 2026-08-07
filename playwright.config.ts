@@ -27,14 +27,14 @@ export default defineConfig({
   webServer: [
     {
       name: "app",
-      command: `NEXT_DIST_DIR=.next-e2e E2E_DISCOVERY_FIXTURE=true npm run dev -- --port ${APP_PORT}`,
+      command: `NEXT_DIST_DIR=.next-e2e E2E_DISCOVERY_FIXTURE=true INNGEST_DEV=1 npm run dev:web -- --port ${APP_PORT}`,
       url: `http://127.0.0.1:${APP_PORT}`,
       reuseExistingServer: false,
       timeout: 120_000,
     },
     {
       name: "inngest-dev-server",
-      command: `npx inngest-cli dev --no-discovery --port ${INNGEST_DEV_PORT} -u http://127.0.0.1:${APP_PORT}/api/inngest`,
+      command: `npx --yes --ignore-scripts=false inngest-cli@latest dev --no-discovery --port ${INNGEST_DEV_PORT} -u http://127.0.0.1:${APP_PORT}/api/inngest`,
       url: `http://127.0.0.1:${INNGEST_DEV_PORT}`,
       reuseExistingServer: false,
       timeout: 120_000,

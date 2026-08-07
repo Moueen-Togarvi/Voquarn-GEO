@@ -10,9 +10,9 @@ import {
 } from "@/lib/discovery/brand-profile";
 import {
   assertPublicWebsiteUrl,
-  readPublicWebsite,
   UnsafeWebsiteError,
 } from "@/lib/discovery/website";
+import { readPublicWebsiteProfile } from "@/lib/discovery/site-profile";
 import { scopedDb } from "@/lib/db/scoped";
 import { inngest } from "@/lib/inngest/client";
 import { brandDiscoveryRequested } from "@/lib/inngest/events";
@@ -88,8 +88,8 @@ export const brandDiscovery = inngest.createFunction(
       }
     });
 
-    const snapshot = await step.run("read-website", () =>
-      readPublicWebsite(websiteUrl),
+    const snapshot = await step.run("scrape-website-profile", () =>
+      readPublicWebsiteProfile(websiteUrl),
     );
 
     const discovery = await step.run(
@@ -104,9 +104,9 @@ export const brandDiscovery = inngest.createFunction(
           };
         }
 
-        if (!process.env.ZAI_API_KEY) {
+        if (!process.env.OPENAI_API_KEY) {
           throw new NonRetriableError(
-            "Automatic brand research is not configured. Add ZAI_API_KEY and try again.",
+            "Automatic brand research is not configured. Add OPENAI_API_KEY and try again.",
           );
         }
 
@@ -132,7 +132,10 @@ export const brandDiscovery = inngest.createFunction(
         });
 
         return {
-          profile: parseDiscoveredProfile(input, result.content),
+          profile: {
+            ...parseDiscoveredProfile(input, result.content),
+            discoveryPageCount: snapshot.pages.length,
+          },
           sources: result.sources,
           usage: result.usage,
           providerCallId: providerCall?.id ?? null,
@@ -181,7 +184,11 @@ export const brandDiscovery = inngest.createFunction(
         await setOperationBrand(ctx, operationId, brand.id);
       }
       await completeOperation(ctx, operationId, {
-        metadata: { brandId: brand.id, sourceCount: discovery.sources.length },
+        metadata: {
+          brandId: brand.id,
+          sourceCount: discovery.sources.length,
+          pagesAnalyzed: snapshot.pages.length,
+        },
       });
     });
 

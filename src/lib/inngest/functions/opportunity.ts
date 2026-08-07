@@ -1,7 +1,7 @@
 import type { WorkspaceContext } from "@/lib/auth/context";
 import { getBrand } from "@/lib/brands/service";
 import { getLatestCrawlRun } from "@/lib/crawl/service";
-import { GlmEmbeddingProvider } from "@/lib/embeddings/provider";
+import { OpenAiEmbeddingProvider } from "@/lib/embeddings/provider";
 import {
   ensurePageEmbeddings,
   ensureTopicEmbeddings,
@@ -98,9 +98,9 @@ export const opportunityDetect = inngest.createFunction(
       };
     });
 
-    if (process.env.ZAI_API_KEY) {
+    if (process.env.OPENAI_API_KEY) {
       await step.run("ensure-embeddings", async () => {
-        const provider = new GlmEmbeddingProvider();
+        const provider = new OpenAiEmbeddingProvider();
         try {
           await ensureTopicEmbeddings(ctx, {
             brandId,
@@ -180,7 +180,7 @@ export const opportunityDetect = inngest.createFunction(
       progressCurrent: gaps.length,
     });
 
-    if (process.env.ZAI_API_KEY && created.length > 0) {
+    if (process.env.OPENAI_API_KEY && created.length > 0) {
       await step.run("explain-top-opportunities", async () => {
         const top = [...created]
           .sort((a, b) => b.score - a.score)

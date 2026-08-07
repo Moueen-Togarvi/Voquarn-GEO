@@ -29,7 +29,7 @@ export async function judgeQuality(
     operationId?: string;
   },
 ): Promise<QualityJudgeResult | null> {
-  if (!process.env.ZAI_API_KEY) return null;
+  if (!process.env.OPENAI_API_KEY) return null;
 
   try {
     const provider = resolveDefault("generation");

@@ -24,7 +24,7 @@ export type LlmUsage = {
 export type LlmResult<T> = {
   provider: string;
   model: string;
-  /** Null for providers (like GLM today) that do not report a distinct version. */
+  /** Provider-reported model/version identifier when available. */
   providerVersion: string | null;
   requestId: string | null;
   /**
@@ -70,12 +70,10 @@ export interface LlmProvider {
 
 /**
  * Thrown by a provider's generateJson() when the raw response is not valid
- * JSON, or is valid JSON that fails the caller's Zod schema — `json_object`
- * response-format mode gives no schema guarantee, so this is expected to
- * happen. Carries the raw content so src/lib/llm/structured.ts can re-prompt
- * the model with it rather than discarding the failed attempt. Still a
- * plain Error subclass, so every existing `catch (error)` block that only
- * checks `error instanceof Error` keeps working unchanged.
+ * JSON, or is valid JSON that fails the caller's Zod schema. Carries the raw
+ * content so src/lib/llm/structured.ts can re-prompt rather than discarding
+ * the failed attempt. OpenAI Structured Outputs makes this uncommon, but the
+ * provider-neutral repair contract remains useful for future adapters.
  */
 export class StructuredParseError extends Error {
   readonly rawContent: string;

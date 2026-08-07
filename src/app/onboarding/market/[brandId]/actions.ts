@@ -7,6 +7,10 @@ import { activateBrand, setBrandMarket } from "@/lib/brands/service";
 import { createGoal } from "@/lib/goals/service";
 import { bulkAddKeywords } from "@/lib/keywords/service";
 import { findOrCreateMarket } from "@/lib/markets/service";
+import { inngest } from "@/lib/inngest/client";
+import { promptsGenerationRequested } from "@/lib/inngest/events";
+import { createOperation } from "@/lib/operations/service";
+import { childLogger } from "@/lib/observability/logger";
 
 const goalTypes = [
   "INCREASE_AI_VISIBILITY",
@@ -106,6 +110,32 @@ export async function finalizeOnboardingAction(
     }
 
     await activateBrand(ctx, parsed.data.brandId);
+
+    // The first niche-grounded monitoring set is part of onboarding, not a
+    // separate chore. It runs durably after activation; users can review and
+    // refine the generated prompts from the Prompts page.
+    try {
+      const promptOperation = await createOperation(ctx, {
+        kind: "PROMPT_GENERATION",
+        brandId: parsed.data.brandId,
+        progressTotal: 3,
+      });
+      await inngest.send(
+        promptsGenerationRequested.create({
+          workspaceId: ctx.workspaceId,
+          brandId: parsed.data.brandId,
+          operationId: promptOperation.id,
+        }),
+      );
+    } catch (error) {
+      // Activation has already succeeded. Never trap the user in the last
+      // onboarding step because the async prompt enqueue was temporarily down;
+      // the Prompts page still exposes the same generation action for retry.
+      childLogger({ fn: "finalizeOnboardingAction" }).warn(
+        { err: error instanceof Error ? error.message : String(error) },
+        "initial prompt generation could not be queued",
+      );
+    }
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : "Something went wrong.",

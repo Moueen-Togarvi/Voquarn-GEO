@@ -96,6 +96,32 @@ export function CompetitorReview({ brand }: { brand: BrandDto }) {
             ) : null}
           </label>
         </div>
+        <div className="research-profile-grid">
+          {[
+            ["Products & services", brand.services],
+            ["Target audiences", brand.audiences],
+            ["Buyer pain points", brand.painPoints],
+            ["Blog & resource themes", brand.contentThemes],
+            ["Differentiators", brand.differentiators],
+          ].map(([label, items]) => (
+            <div className="research-profile-group" key={label as string}>
+              <span>{label as string}</span>
+              {(items as string[]).length > 0 ? (
+                <ul>
+                  {(items as string[]).map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              ) : (
+                <small>No reliable evidence found.</small>
+              )}
+            </div>
+          ))}
+        </div>
+        <p className="research-page-count">
+          Profile grounded in {brand.discoveryPageCount} website page
+          {brand.discoveryPageCount === 1 ? "" : "s"} plus OpenAI web research.
+        </p>
       </section>
 
       <section className="form-section">

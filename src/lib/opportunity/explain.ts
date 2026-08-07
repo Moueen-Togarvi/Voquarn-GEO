@@ -64,7 +64,7 @@ export function buildExplainRequest(
 /**
  * Best-effort upgrade of a detector's deterministic title/summary/actions —
  * never throws. Callers keep the deterministic DetectedGap fields on any
- * failure (no ZAI_API_KEY, provider error, malformed JSON), the same
+ * failure (no OPENAI_API_KEY, provider error, malformed JSON), the same
  * degrade-gracefully posture as Browserless/CrUX in Phase 4: the feature
  * works with nothing configured, and gets better with a key.
  */
@@ -72,7 +72,7 @@ export async function explainOpportunity(
   ctx: WorkspaceContext,
   input: { gap: DetectedGap; brandName: string; operationId?: string },
 ): Promise<ExplainedOpportunity | null> {
-  if (!process.env.ZAI_API_KEY) return null;
+  if (!process.env.OPENAI_API_KEY) return null;
 
   try {
     const provider = resolveDefault("generation");

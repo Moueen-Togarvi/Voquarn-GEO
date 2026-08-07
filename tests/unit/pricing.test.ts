@@ -8,13 +8,15 @@ describe("resolveRate", () => {
   });
 
   it("returns null before the rate's effective date", () => {
-    expect(resolveRate("zai", "glm-5.2", new Date("2025-01-01"))).toBeNull();
+    expect(
+      resolveRate("openai", "gpt-5.6-sol", new Date("2026-08-06")),
+    ).toBeNull();
   });
 
   it("returns the rate once its effective date has passed", () => {
-    const rate = resolveRate("zai", "glm-5.2", new Date("2026-06-01"));
+    const rate = resolveRate("openai", "gpt-5.6-sol", new Date("2026-08-07"));
     expect(rate).not.toBeNull();
-    expect(rate?.provider).toBe("zai");
+    expect(rate?.provider).toBe("openai");
     expect(rate?.currency).toBe("USD");
   });
 });
@@ -32,18 +34,17 @@ describe("calculateCost", () => {
 
   it("computes cost from a known rate without throwing", () => {
     const result = calculateCost(
-      "zai",
-      "glm-5.2",
+      "openai",
+      "gpt-5.6-sol",
       {
         inputTokens: 1_000_000,
         outputTokens: 1_000_000,
         totalTokens: 2_000_000,
       },
-      new Date("2026-06-01"),
+      new Date("2026-08-07"),
     );
     expect(result).not.toBeNull();
     expect(result?.currency).toBe("USD");
-    expect(typeof result?.costUnits).toBe("number");
-    expect(Number.isNaN(result?.costUnits)).toBe(false);
+    expect(result?.costUnits).toBe(35);
   });
 });

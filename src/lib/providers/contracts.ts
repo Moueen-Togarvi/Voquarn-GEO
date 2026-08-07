@@ -14,8 +14,8 @@ export interface GenerationProvider {
 
 /**
  * A provider eligible for the repeatable AI-visibility benchmark (Phase 2).
- * Structurally identical to GenerationProvider today — GLM's web-search
- * generateText call IS a benchmark run. Split into its own type now so a
+ * Structurally identical to GenerationProvider today — OpenAI's web-search
+ * generateText call is a benchmark run. Split into its own type now so a
  * provider that can generate but should never be scored as a benchmark (or
  * vice versa) can implement one without the other once that distinction
  * actually exists.

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { WorkspaceContext } from "@/lib/auth/context";
-import type { MappedSerpResult } from "@/lib/providers/dataforseo/mapper";
+import type { MappedSerpResult } from "@/lib/providers/scrapedo/mapper";
 
 const hasTestDatabase = Boolean(process.env.TEST_DATABASE_URL);
 

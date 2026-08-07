@@ -4,7 +4,8 @@ import { PageHeader } from "@/components/page-header";
 export const metadata = { title: "Models" };
 
 export default function ModelsPage() {
-  const configured = Boolean(process.env.ZAI_API_KEY);
+  const configured = Boolean(process.env.OPENAI_API_KEY);
+  const model = process.env.OPENAI_MODEL ?? "gpt-5.6-sol";
 
   return (
     <div className="page-container">
@@ -19,7 +20,7 @@ export default function ModelsPage() {
         </div>
         <div className="model-copy">
           <div className="model-title-row">
-            <h2>GLM-5.2</h2>
+            <h2>OpenAI GPT-5.6 Sol</h2>
             <span
               className={configured ? "status-pill success" : "status-pill"}
             >
@@ -32,7 +33,7 @@ export default function ModelsPage() {
             </span>
           </div>
           <p>
-            Z.AI flagship text model · structured JSON · web search · citation
+            Responses API · Structured Outputs · native web search · citation
             metadata
           </p>
           <div className="capability-row">
@@ -43,17 +44,16 @@ export default function ModelsPage() {
         </div>
         <div className="model-side">
           <small>Model ID</small>
-          <code>glm-5.2</code>
+          <code>{model}</code>
         </div>
       </section>
       <div className="provider-note">
-        <strong>GLM powers automatic company research.</strong>
+        <strong>OpenAI powers company research and AI visibility.</strong>
         <p>
-          Add <code>ZAI_API_KEY</code> in the protected deployment environment
-          to discover product context and direct competitors during onboarding.
-          Prompt generation is still reserved for the next milestone. OpenAI,
-          Perplexity, and other providers can use the same internal contract
-          later.
+          Add <code>OPENAI_API_KEY</code> in the protected deployment
+          environment. Voquarn first analyzes the client&apos;s service and
+          content pages, then uses OpenAI web search to validate direct
+          competitors and generate niche-specific AEO/GEO monitoring prompts.
         </p>
       </div>
     </div>

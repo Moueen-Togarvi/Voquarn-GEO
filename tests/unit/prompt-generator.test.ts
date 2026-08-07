@@ -11,6 +11,11 @@ const input = {
     name: "Voquarn",
     description: "AI visibility tracking for SaaS teams",
     category: "AI search visibility software",
+    services: ["AI visibility monitoring", "Competitor benchmarking"],
+    audiences: ["SEO teams", "Marketing leaders"],
+    painPoints: ["Low visibility in AI answers", "Unknown citation gaps"],
+    contentThemes: ["AEO", "GEO measurement"],
+    differentiators: ["Evidence-backed recommendations"],
   },
   competitors: [{ name: "Market Signal" }, { name: "Search Scope" }],
   market: { language: "en", country: "US" },
@@ -26,6 +31,10 @@ describe("buildPromptGenerationMessages", () => {
     expect(messages[1]?.content).toContain(
       "Known competitors: Market Signal, Search Scope",
     );
+    expect(messages[1]?.content).toContain(
+      "Products and services: AI visibility monitoring; Competitor benchmarking",
+    );
+    expect(messages[1]?.content).toContain("Buyer pain points");
   });
 
   it("reports no known competitors instead of an empty string", () => {

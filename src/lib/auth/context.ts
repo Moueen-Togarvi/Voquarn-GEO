@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth/server";
 import { isAuthEnabled } from "@/lib/auth/flag";
 import type { WorkspaceContext } from "@/lib/auth/roles";
 import { db } from "@/lib/db";
+import { isPrismaErrorCode } from "@/lib/db/prisma-errors";
 
 export {
   assertRole,
@@ -36,11 +37,7 @@ const DEFAULT_WORKSPACE_SLUG = "default";
 export const requireWorkspaceContext = cache(
   async (): Promise<WorkspaceContext> => {
     if (!isAuthEnabled()) {
-      const workspace = await db.workspace.upsert({
-        where: { slug: DEFAULT_WORKSPACE_SLUG },
-        update: {},
-        create: { slug: DEFAULT_WORKSPACE_SLUG, name: "Voquarn Workspace" },
-      });
+      const workspace = await getOrCreateDefaultWorkspace();
       return { workspaceId: workspace.id, userId: null, role: "OWNER" };
     }
 
@@ -86,3 +83,35 @@ export const requireWorkspaceContext = cache(
     };
   },
 );
+
+/**
+ * Not db.workspace.upsert(): Prisma compiles upsert into a transaction-
+ * wrapped query plan, and the Neon HTTP compatibility adapter
+ * (src/lib/db/neon-http-compat.ts) fakes commit/rollback as instant no-ops
+ * since HTTP requests share no real session. That combination throws
+ * Prisma's client-side P2028 "Transaction already closed" guard on this,
+ * the single highest-traffic query in the app (every page load goes through
+ * requireWorkspaceContext). A plain find-then-create is two ordinary
+ * single-statement queries, which the HTTP adapter handles natively; the
+ * P2002 catch handles the first-ever-request race where two requests both
+ * find nothing and both try to create.
+ */
+async function getOrCreateDefaultWorkspace() {
+  const existing = await db.workspace.findUnique({
+    where: { slug: DEFAULT_WORKSPACE_SLUG },
+  });
+  if (existing) return existing;
+
+  try {
+    return await db.workspace.create({
+      data: { slug: DEFAULT_WORKSPACE_SLUG, name: "Voquarn Workspace" },
+    });
+  } catch (error) {
+    if (isPrismaErrorCode(error, "P2002")) {
+      return await db.workspace.findUniqueOrThrow({
+        where: { slug: DEFAULT_WORKSPACE_SLUG },
+      });
+    }
+    throw error;
+  }
+}

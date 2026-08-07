@@ -21,6 +21,12 @@ export type BrandDto = {
   domain: string;
   description: string;
   category: string;
+  services: string[];
+  audiences: string[];
+  painPoints: string[];
+  contentThemes: string[];
+  differentiators: string[];
+  discoveryPageCount: number;
   status: BrandStatus;
   defaultMarketId: string | null;
   createdAt: string;

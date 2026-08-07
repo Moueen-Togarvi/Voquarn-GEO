@@ -57,17 +57,17 @@ describe("quality draft fixtures", () => {
   });
 });
 
-describe.skipIf(!process.env.ZAI_API_KEY)(
+describe.skipIf(!process.env.OPENAI_API_KEY)(
   "quality judge (live, nightly only)",
   () => {
     it.each(loadFixtures())(
       "scores $id within the expected range on every asserted dimension",
       async (fixture) => {
-        const { GlmProvider } = await import("@/lib/llm/glm");
+        const { OpenAiProvider } = await import("@/lib/llm/openai");
         const { buildQualityJudgeMessages } =
           await import("@/lib/quality/rubric");
 
-        const provider = new GlmProvider();
+        const provider = new OpenAiProvider();
         const result = await provider.generateJson({
           messages: buildQualityJudgeMessages({
             title: fixture.title,

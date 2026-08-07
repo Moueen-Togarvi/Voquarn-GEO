@@ -2,15 +2,15 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { mapSerpResponse } from "@/lib/providers/dataforseo/mapper";
-import { serpLiveResponseSchema } from "@/lib/providers/dataforseo/types";
+import { mapSerpResponse } from "@/lib/providers/scrapedo/mapper";
+import { scrapeDoSerpResponseSchema } from "@/lib/providers/scrapedo/types";
 
 function loadFixture(name: string) {
   const raw = readFileSync(
     path.join(process.cwd(), "tests/fixtures/serp", name),
     "utf-8",
   );
-  return serpLiveResponseSchema.parse(JSON.parse(raw));
+  return scrapeDoSerpResponseSchema.parse(JSON.parse(raw));
 }
 
 describe("mapSerpResponse", () => {
@@ -55,32 +55,33 @@ describe("mapSerpResponse", () => {
     );
   });
 
-  it("expands a People Also Ask block's resolved sub-questions into PAA results", () => {
+  it("maps documented video results", () => {
     const response = loadFixture("organic-with-ai-overview.json");
     const { results } = mapSerpResponse(response);
 
-    const paa = results.filter((result) => result.type === "PAA");
-    expect(paa).toHaveLength(1);
-    expect(paa[0]).toMatchObject({
-      position: 3,
-      domain: "search-scope.example",
-      title: "What is AI visibility?",
+    const videos = results.filter((result) => result.type === "VIDEO");
+    expect(videos).toHaveLength(1);
+    expect(videos[0]).toMatchObject({
+      position: 5,
+      domain: "youtube.com",
+      title: "AI visibility explained",
     });
+  });
+
+  it("does not invent PAA source rows when related questions have no URL", () => {
+    const response = loadFixture("organic-with-ai-overview.json");
+    const { results } = mapSerpResponse(response);
+    expect(results.filter((result) => result.type === "PAA")).toEqual([]);
   });
 
   it("reports resultCount from the response's items_count", () => {
     const response = loadFixture("organic-with-ai-overview.json");
     const { resultCount } = mapSerpResponse(response);
-    expect(resultCount).toBe(4);
+    expect(resultCount).toBe(5);
   });
 
   it("returns an empty result set for a response with no tasks", () => {
-    const empty = mapSerpResponse(
-      serpLiveResponseSchema.parse({
-        status_code: 20000,
-        status_message: "Ok.",
-      }),
-    );
+    const empty = mapSerpResponse(scrapeDoSerpResponseSchema.parse({}));
     expect(empty.results).toEqual([]);
     expect(empty.resultCount).toBe(0);
   });

@@ -75,7 +75,7 @@ That is narrow enough to ship, broad enough to demonstrate the closed loop, and 
 - Target LTV is both $900 and $1,800; CAC is both $200 and $150.
 - The initial user input includes keyword, industry, geography, and language, while the repository onboarding asks only for name and URL.
 - The PRD database uses `User` and `Site`; the repository uses `Workspace` and `Brand`; the UI calls a Brand a Project.
-- The PRD says GPT-4o/Claude, while the repository uses a GLM provider. Provider choice should be configuration, not product terminology.
+- The PRD says GPT-4o/Claude, while the repository uses OpenAI Responses. Provider choice should be configuration, not product terminology.
 - “Google only” appears under “AI search platforms,” conflating Google web rank tracking with AI answer/citation tracking.
 
 These should be fixed in a PRD v1.1 before the beta is priced or marketed.
@@ -93,7 +93,7 @@ The repository is a useful Phase-1 foundation, not a functioning Conquest Loop y
 - Default workspace and multi-project brand CRUD.
 - Brand onboarding from company name and public URL.
 - SSRF-conscious URL validation, redirect checking, response limits, and basic HTML extraction.
-- GLM provider adapter with typed text/JSON results, source metadata, usage, and provider request ID.
+- OpenAI provider adapter with typed text/JSON results, source metadata, usage, and provider request ID.
 - AI-assisted brand description, category, and 2–4 competitor discovery.
 - Prisma models for future prompts, analysis batches, prompt runs, run analyses, and sources.
 - Inngest client and route skeleton.
@@ -189,7 +189,7 @@ Application services + policy/entitlement checks
               +---------------+----------------+
               |               |                |
           SEO adapters     Crawl adapter    LLM adapters
-          DataForSEO       fetch first      GLM + selected
+          Scrape.do        fetch first      OpenAI + selected
           GSC / CrUX       browser fallback benchmark APIs
               |               |                |
               +---------------+----------------+
@@ -216,7 +216,7 @@ Application services + policy/entitlement checks
 | Vector search | Start with `pgvector` in Neon when RAG/topic similarity is needed. Avoid Pinecone until corpus size/latency demonstrates a need for a separate vector service. |
 | Workflows | Keep Inngest. Do not add BullMQ. Use steps, idempotency keys, retries, cancellation, schedules, and per-provider/workspace concurrency. |
 | Crawl | Keep the secure HTTP reader for fast pages; add sitemap parsing and structured extraction. Use a managed browser/crawl fallback for JavaScript pages instead of running browsers inside request handlers. |
-| SEO data | Use DataForSEO for SERP, keyword, and later backlink data behind one internal adapter. Use GSC for verified first-party outcomes. |
+| SEO data | Use Scrape.do's structured Google Search plugin for localized SERP evidence behind one internal adapter. Use GSC for verified first-party outcomes, and evaluate a separate licensed provider if keyword-volume or backlink datasets become necessary. |
 | AI providers | Keep the existing `LlmProvider` idea, but split generation from benchmark/search capabilities. Pin model versions for measurements. |
 | Auth | Use one workspace-aware auth solution. Clerk Organizations is fastest for B2B beta; a self-hosted alternative lowers vendor cost but increases security/maintenance responsibility. Do not combine Supabase Auth with Neon merely because the PRD listed Supabase. |
 | Storage | Use one S3-compatible object store for compressed raw crawl/response snapshots. Store metadata and hashes in PostgreSQL. |
@@ -484,7 +484,7 @@ Exit gate:
 
 Deliverables:
 
-- DataForSEO adapter for location/language/device-specific organic results.
+- Scrape.do adapter for location/language/device-specific structured Google results.
 - Project keyword/topic import and validation.
 - SERP hunt workflow with batch scheduling, caching, deduplication, canonical-domain normalization, and aggregator/exclusion rules.
 - Store immutable SERP snapshots and normalized results.
@@ -618,7 +618,7 @@ Deliverables:
 - Schema delivery only where the site's actual connector/plugin supports it; otherwise provide validated markup for manual/template integration.
 - Publication preview, final diff, approval, external ID/URL, last sync, and rollback metadata.
 - Search Console OAuth and daily import of query/page clicks, impressions, CTR, and average position.
-- DataForSEO rank snapshots for configured priority keywords.
+- Scrape.do rank snapshots for configured priority keywords.
 - IndexNow submission for participating engines where site ownership/key setup is valid.
 - Weekly report: work completed, evidence changes, visibility outcomes, failures, cost, and next recommendations.
 - Simple experiment windows connecting a publication to baseline and later observations without claiming causal certainty.
@@ -667,7 +667,7 @@ A 12-week **concierge beta** is realistic if scope is fixed to:
 
 - Weeks 1–2: Phase 0 plus essential tenant auth and project configuration.
 - Weeks 3–4: prompt library and one AI visibility benchmark provider.
-- Weeks 5–6: DataForSEO Google HUNT and explainable competitor list.
+- Weeks 5–6: Scrape.do Google HUNT and explainable competitor list.
 - Weeks 7–8: sitemap crawl and autopsy-lite.
 - Weeks 9–10: top-three opportunities and evidence-backed briefs.
 - Weeks 11–12: content draft editor, approval, and operational hardening.
@@ -711,7 +711,7 @@ Each connector needs a capability matrix; “publish,” “set SEO fields,” �
 
 ### Expansion D — Backlinks and external demand signals
 
-- DataForSEO backlink intersections first.
+- Evaluate a licensed backlink-data provider; Scrape.do is used for SERPs and does not replace a backlink index.
 - Trends and demand signals through licensed APIs.
 - Reddit/X/Quora only after approved commercial access and data-use review.
 - No automated outreach or astroturfing.
@@ -939,7 +939,7 @@ Execute these in order after Phase-0 decisions:
 7. Build prompt generation/review on the existing `Prompt` model.
 8. Implement benchmark execution on `AnalysisBatch` / `PromptRun` and persist sources.
 9. Build exact aggregate queries and the first real Overview dashboard.
-10. Add the DataForSEO adapter and immutable SERP snapshots.
+10. Add the Scrape.do adapter and immutable SERP snapshots.
 11. Implement deterministic Threat Score v1 and competitor review.
 12. Add sitemap/page crawling and normalized page observations.
 13. Build Opportunity Score v1 and top-three weekly plan.
@@ -978,7 +978,7 @@ Execute these in order after Phase-0 decisions:
 - PageSpeed Insights recommends CrUX APIs for field data as PSI field data is being discontinued: <https://developers.google.com/speed/docs/insights/v5/get-started>
 - Inngest supports step retries and keyed concurrency appropriate for provider quotas: <https://www.inngest.com/docs/features/inngest-functions/error-retries/retries> and <https://www.inngest.com/docs/functions/concurrency>
 - Neon supports pgvector, avoiding a separate vector database at early scale: <https://neon.com/docs/extensions/pgvector>
-- DataForSEO provides SERP and backlink intersections through API-first products: <https://dataforseo.com/apis>
+- Scrape.do's Google Search plugin returns localized, structured SERP results including organic listings and AI Overview references: <https://scrape.do/documentation/google-scraper-api/search/search/>
 - WordPress supports REST post creation and Application Password authentication: <https://developer.wordpress.org/rest-api/reference/posts/> and <https://developer.wordpress.org/rest-api/using-the-rest-api/authentication/>
 - Stripe supports usage meters and idempotent usage event identifiers: <https://docs.stripe.com/billing/subscriptions/usage-based/meters/configure>
 

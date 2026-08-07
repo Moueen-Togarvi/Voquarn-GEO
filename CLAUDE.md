@@ -79,11 +79,12 @@ nowhere else.
 ## Testing
 
 Pure functions are extracted specifically so they can be tested without
-network: `buildGlmRequest`, `buildDiscoveryMessages`, `extractWebsiteSnapshot`.
+network: `buildOpenAiRequest`, `buildDiscoveryMessages`,
+`extractWebsiteSnapshot`, `selectRepresentativeWebsiteUrls`.
 Follow that pattern — parsers, scorers, and extractors stay pure, and the I/O
 shell around them stays thin.
 
-Inject dependencies through constructor defaults (`new GlmProvider("test-key")`)
+Inject dependencies through constructor defaults (`new OpenAiProvider("test-key")`)
 rather than mocking modules. Gate anything needing an external resource with
 `describe.skipIf(...)`. Playwright never hits a live LLM: it sets
 `E2E_DISCOVERY_FIXTURE=true`, which short-circuits to `fixtureProfile()`.

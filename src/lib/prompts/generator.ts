@@ -31,7 +31,16 @@ export const generatedPromptsSchema = z.object({
 export type GeneratedPrompts = z.infer<typeof generatedPromptsSchema>;
 
 export type PromptGenerationInput = {
-  brand: { name: string; description: string; category: string };
+  brand: {
+    name: string;
+    description: string;
+    category: string;
+    services: string[];
+    audiences: string[];
+    painPoints: string[];
+    contentThemes: string[];
+    differentiators: string[];
+  };
   competitors: { name: string }[];
   market: { language: string; country: string };
 };
@@ -48,15 +57,18 @@ export function buildPromptGenerationMessages(
     {
       role: "system",
       content: [
-        "You write realistic buyer questions for an AI-visibility benchmark.",
+        "You build high-signal AEO/GEO monitoring prompts that reveal whether AI answer engines understand, recommend, compare, and cite a business in its real market niche.",
         "Each question is something a real prospective buyer would actually type into an AI assistant while researching this category — never a question that names the target company as the obvious right answer.",
-        "Produce a balanced spread across four types:",
+        "Use web search to learn current terminology and buying considerations in this exact niche, but ground every prompt in the supplied first-party profile. Do not drift into adjacent categories.",
+        "Produce 20 to 28 non-duplicative questions with a balanced spread across four types:",
         "CATEGORY — a general question about the product category with no company named.",
         "COMPARISON — a question comparing two or more companies in the category, potentially including the target or a competitor by name.",
         "USE_CASE — a question about solving a specific problem or use case in this category.",
         "BRAND_SPECIFIC — a question that names the target company directly (e.g. asking what it does, or whether it fits a scenario).",
+        "Cover multiple funnel stages: problem discovery, category education, shortlist/recommendation, alternatives, evaluation, trust/proof, pricing or implementation when relevant, and final selection.",
+        "Distribute prompts across the listed services, audiences, pain points, and content themes. Use concrete buyer language; avoid repetitive templates, SEO keyword fragments, vague questions, and claims not present in the profile.",
+        "At least half of CATEGORY and USE_CASE questions must be non-branded so the benchmark can measure organic category visibility.",
         `Phrase every question in ${input.market.language} for a buyer in ${input.market.country}.`,
-        "Return strict JSON only, matching the requested schema exactly.",
       ].join(" "),
     },
     {
@@ -65,6 +77,11 @@ export function buildPromptGenerationMessages(
         `Company: ${input.brand.name}`,
         `What it does: ${input.brand.description}`,
         `Category: ${input.brand.category}`,
+        `Products and services: ${input.brand.services.join("; ") || "Not identified"}`,
+        `Target audiences: ${input.brand.audiences.join("; ") || "Not identified"}`,
+        `Buyer pain points: ${input.brand.painPoints.join("; ") || "Not identified"}`,
+        `Existing content themes: ${input.brand.contentThemes.join("; ") || "None identified"}`,
+        `Claimed differentiators: ${input.brand.differentiators.join("; ") || "None identified"}`,
         `Known competitors: ${competitorList}`,
       ].join("\n"),
     },
@@ -77,8 +94,8 @@ export function buildPromptGenerationRequest(
   return {
     messages: buildPromptGenerationMessages(input),
     schema: generatedPromptsSchema,
-    webSearch: false,
-    maxTokens: 3000,
+    webSearch: true,
+    maxTokens: 4500,
     temperature: 0.6,
   };
 }

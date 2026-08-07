@@ -22,10 +22,9 @@ export { MAX_REPAIR_ATTEMPTS, buildRepairMessages } from "@/lib/llm/repair";
  * Inngest-level retry already produces multiple rows elsewhere in this
  * codebase, rather than inventing a second bookkeeping mechanism.
  *
- * See A10 in the implementation plan on why this repairs on top of
- * `json_object` mode rather than assuming a provider-native structured
- * output guarantee: that guarantee is provider-specific and unverified here
- * (Z.AI's, in particular, is never exercised live in this environment).
+ * The OpenAI adapter now uses native Structured Outputs, so repair should be
+ * rare. Keeping the loop at the provider-neutral layer still protects future
+ * adapters and records every retry as its own auditable ProviderCall.
  */
 export async function generateStructured<T>(
   ctx: WorkspaceContext,

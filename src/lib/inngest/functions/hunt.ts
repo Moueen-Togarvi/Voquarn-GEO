@@ -24,16 +24,16 @@ import {
   failOperation,
   startOperation,
 } from "@/lib/operations/service";
-import { DataForSeoClient } from "@/lib/providers/dataforseo/client";
+import { ScrapeDoClient } from "@/lib/providers/scrapedo/client";
 import {
   fixtureSerpResponse,
   shouldUseHuntFixture,
-} from "@/lib/providers/dataforseo/fixture";
+} from "@/lib/providers/scrapedo/fixture";
 import {
   mapSerpResponse,
   type MappedSerpResult,
-} from "@/lib/providers/dataforseo/mapper";
-import { buildSerpRequest } from "@/lib/providers/dataforseo/serp";
+} from "@/lib/providers/scrapedo/mapper";
+import { buildSerpRequest } from "@/lib/providers/scrapedo/serp";
 import { withGenericProviderCall } from "@/lib/providers/instrument";
 import { writeSnapshot } from "@/lib/storage/blob";
 
@@ -99,13 +99,13 @@ export const huntSerpFetch = inngest.createFunction(
       if (shouldUseHuntFixture()) {
         mapped = mapSerpResponse(fixtureSerpResponse(context.keywordText));
       } else {
-        if (!process.env.DATAFORSEO_LOGIN || !process.env.DATAFORSEO_PASSWORD) {
+        if (!process.env.SCRAPEDO_API_TOKEN) {
           throw new NonRetriableError(
-            "SERP hunting is not configured. Add DATAFORSEO_LOGIN and DATAFORSEO_PASSWORD and try again.",
+            "SERP hunting is not configured. Add SCRAPEDO_API_TOKEN and try again.",
           );
         }
 
-        const client = new DataForSeoClient();
+        const client = new ScrapeDoClient();
         const request = buildSerpRequest({
           keyword: context.keywordText,
           country: context.country,
@@ -115,7 +115,7 @@ export const huntSerpFetch = inngest.createFunction(
 
         const providerOutcome = await withGenericProviderCall(
           ctx,
-          { capability: "SERP", provider: "dataforseo" },
+          { capability: "SERP", provider: "scrapedo" },
           () => client.fetchOrganicSerp(request),
         );
         providerCallId = providerOutcome.providerCallId;

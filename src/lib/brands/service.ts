@@ -29,6 +29,12 @@ function toBrandDto(brand: BrandWithCompetitors): BrandDto {
     domain: brand.domain,
     description: brand.description,
     category: brand.category,
+    services: brand.services,
+    audiences: brand.audiences,
+    painPoints: brand.painPoints,
+    contentThemes: brand.contentThemes,
+    differentiators: brand.differentiators,
+    discoveryPageCount: brand.discoveryPageCount,
     status: brand.status,
     defaultMarketId: brand.defaultMarketId,
     createdAt: brand.createdAt.toISOString(),
@@ -98,6 +104,12 @@ export async function createBrand(
       domain: domainFromUrl(input.websiteUrl),
       description: input.description,
       category: input.category,
+      services: input.services ?? [],
+      audiences: input.audiences ?? [],
+      painPoints: input.painPoints ?? [],
+      contentThemes: input.contentThemes ?? [],
+      differentiators: input.differentiators ?? [],
+      discoveryPageCount: input.discoveryPageCount ?? 0,
       status: "DRAFT",
       competitors: {
         create: input.competitors.map((competitor) => ({
@@ -162,6 +174,12 @@ export async function updateBrand(
       domain: domainFromUrl(input.websiteUrl),
       description: input.description,
       category: input.category,
+      services: input.services,
+      audiences: input.audiences,
+      painPoints: input.painPoints,
+      contentThemes: input.contentThemes,
+      differentiators: input.differentiators,
+      discoveryPageCount: input.discoveryPageCount,
       competitors: {
         deleteMany: toDelete.length > 0 ? { id: { in: toDelete } } : undefined,
         upsert: input.competitors.map((competitor) => {

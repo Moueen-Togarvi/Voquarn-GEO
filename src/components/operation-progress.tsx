@@ -6,12 +6,25 @@ import type { ApiFailure, ApiSuccess } from "@/lib/api/types";
 import type { OperationDto } from "@/lib/operations/types";
 
 const POLL_INTERVAL_MS = 1500;
+export const OPERATION_START_TIMEOUT_MS = 45_000;
 const TERMINAL_STATUSES: OperationDto["status"][] = [
   "COMPLETED",
   "PARTIAL",
   "FAILED",
   "CANCELLED",
 ];
+
+export function hasOperationStartTimedOut(
+  operation: OperationDto,
+  now = Date.now(),
+): boolean {
+  const createdAt = Date.parse(operation.createdAt);
+  return (
+    operation.status === "PENDING" &&
+    Number.isFinite(createdAt) &&
+    now - createdAt >= OPERATION_START_TIMEOUT_MS
+  );
+}
 
 /**
  * Polls GET /api/operations/[id] until it reaches a terminal status, then
@@ -62,6 +75,20 @@ export function useOperationPolling(
 
         if (TERMINAL_STATUSES.includes(payload.data.status)) {
           onSettledRef.current(payload.data);
+          return;
+        }
+
+        if (hasOperationStartTimedOut(payload.data)) {
+          const timedOut: OperationDto = {
+            ...payload.data,
+            status: "FAILED",
+            errorCode: "WORKER_NOT_STARTED",
+            errorMessage:
+              "The background worker did not start. Restart npm run dev, wait for the Inngest server to be ready, then submit again.",
+            completedAt: new Date().toISOString(),
+          };
+          setOperation(timedOut);
+          onSettledRef.current(timedOut);
           return;
         }
 

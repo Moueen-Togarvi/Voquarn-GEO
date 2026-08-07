@@ -47,6 +47,12 @@ concierge minutes during beta.
 Pricing is date-effective, keyed `(provider, model, effectiveFrom)`. Model prices
 change; a single hardcoded rate makes historical margin permanently wrong.
 
+The current `calculateCost()` total covers OpenAI input/output tokens only.
+Responses API web-search calls have a separate per-call fee, but `LlmUsage`
+does not yet carry tool-call counts. Until that meter is added, provider-call
+costs for discovery, prompt generation, and benchmarks understate the search
+portion and must not be used as a complete invoice or margin figure.
+
 ## Packaging rules
 
 - Price around **sites plus included monthly usage**.

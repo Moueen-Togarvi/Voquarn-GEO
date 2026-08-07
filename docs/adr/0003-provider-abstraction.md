@@ -4,10 +4,9 @@
 
 ## Context
 
-`src/lib/llm/glm.ts` ends with `export const glm = new GlmProvider()` — a
-module-level singleton constructed at import time, capturing `ZAI_API_KEY` then.
-That makes tests order-dependent, per-workspace keys impossible, and multi-model
-benchmark runs impossible.
+The original provider adapter used a module-level singleton constructed at
+import time, capturing its API key immediately. That made tests order-dependent,
+per-workspace keys impossible, and multi-model benchmark runs impossible.
 
 Separately, `LlmResult<T>` carries `provider`, `model`, `requestId`, `sources`,
 and `usage`, but none of the cost, timing, or snapshot fields that the cost
@@ -24,9 +23,9 @@ Three layers, in this order:
 2. **A registry in the middle.** `src/lib/llm/registry.ts` exposes
    `getProvider(spec)`, `resolveDefault(purpose)`, `listBenchmarkProviders(ctx)`.
    The import-time singleton is deleted.
-3. **The Vercel AI SDK underneath, as transport only.** `ai` v5 +
-   `@ai-sdk/openai-compatible`; Z.AI's endpoint is OpenAI-compatible. This buys
-   retries, native structured outputs via `generateObject`, and tool calling.
+3. **The official OpenAI SDK underneath, as transport only.** The adapter uses
+   the Responses API, native `web_search`, and Structured Outputs through the
+   SDK's Zod helper.
 
 **The AI SDK does not become the abstraction.** It carries no `ProviderCall`,
 cost, or snapshot semantics, and those are load-bearing for margin reporting.

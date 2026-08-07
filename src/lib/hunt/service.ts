@@ -19,7 +19,7 @@ import type {
   ThreatScoreDto,
   TrackedKeywordDto,
 } from "@/lib/hunt/types";
-import type { MappedSerpResult } from "@/lib/providers/dataforseo/mapper";
+import type { MappedSerpResult } from "@/lib/providers/scrapedo/mapper";
 import {
   computeThreatScore,
   THREAT_COMPONENT_WEIGHTS,
@@ -77,7 +77,7 @@ export async function listTrackedKeywords(
 }
 
 /**
- * The cache-check huntSerpFetch runs before spending a DataForSEO credit —
+ * The cache-check huntSerpFetch runs before spending Scrape.do credits —
  * a snapshot for the same (keyword, market, device) fetched within the TTL
  * is reused instead of refetched. See docs/events.md's concurrency section
  * for the companion per-provider rate limit.

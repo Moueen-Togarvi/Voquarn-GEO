@@ -1,12 +1,4 @@
-/**
- * Same posture as every other external adapter in this codebase (GLM,
- * DataForSEO, Google Search Console, Browserless, CrUX): structurally
- * complete against the provider's documented API, but never exercised
- * against a live embeddings endpoint in this environment — verify before
- * relying on it in production. Gated on ZAI_API_KEY, mirroring
- * src/lib/llm/glm.ts, and throws a clear configuration error when absent
- * rather than silently returning empty vectors.
- */
+import OpenAI from "openai";
 
 export const EMBEDDING_DIMENSIONS = 1536;
 
@@ -16,57 +8,43 @@ export interface EmbeddingProvider {
   embed(texts: string[]): Promise<number[][]>;
 }
 
-const ZAI_EMBEDDINGS_ENDPOINT = "https://api.z.ai/api/paas/v4/embeddings";
-export const DEFAULT_ZAI_EMBEDDING_MODEL = "embedding-3";
+export const DEFAULT_OPENAI_EMBEDDING_MODEL = "text-embedding-3-small";
 
-type ZaiEmbeddingResponse = {
-  data?: Array<{ embedding?: number[]; index?: number }>;
-  code?: number | string;
-  message?: string;
-  error?: { code?: number | string; message?: string };
-};
-
-export class GlmEmbeddingProvider implements EmbeddingProvider {
-  readonly provider = "zai";
+export class OpenAiEmbeddingProvider implements EmbeddingProvider {
+  readonly provider = "openai";
   readonly model: string;
+  private readonly client: OpenAI;
 
   constructor(
-    private readonly apiKey = process.env.ZAI_API_KEY,
-    model = process.env.ZAI_EMBEDDING_MODEL ?? DEFAULT_ZAI_EMBEDDING_MODEL,
+    private readonly apiKey = process.env.OPENAI_API_KEY,
+    model = process.env.OPENAI_EMBEDDING_MODEL ??
+      DEFAULT_OPENAI_EMBEDDING_MODEL,
   ) {
     this.model = model;
+    this.client = new OpenAI({
+      apiKey: apiKey ?? "missing-openai-api-key",
+      maxRetries: 0,
+      timeout: 60_000,
+    });
   }
 
   async embed(texts: string[]): Promise<number[][]> {
     if (!this.apiKey) {
       throw new Error(
-        "ZAI_API_KEY is not configured. Embedding calls are disabled until a key is provided.",
+        "OPENAI_API_KEY is not configured. Embedding calls are disabled until a key is provided.",
       );
     }
     if (texts.length === 0) return [];
 
-    const response = await fetch(ZAI_EMBEDDINGS_ENDPOINT, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ model: this.model, input: texts }),
-      signal: AbortSignal.timeout(60_000),
+    const response = await this.client.embeddings.create({
+      model: this.model,
+      input: texts,
+      dimensions: EMBEDDING_DIMENSIONS,
+      encoding_format: "float",
     });
-
-    const payload = (await response.json()) as ZaiEmbeddingResponse;
-    if (!response.ok) {
-      const code = payload.error?.code ?? payload.code ?? response.status;
-      const message =
-        payload.error?.message ?? payload.message ?? response.statusText;
-      throw new Error(`Z.AI embeddings request failed (${code}): ${message}`);
-    }
-
-    const rows = payload.data ?? [];
     // Defensive against a provider that doesn't preserve input order —
     // sort by the returned index rather than trusting array position.
-    const sorted = [...rows].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
-    return sorted.map((row) => row.embedding ?? []);
+    const sorted = [...response.data].sort((a, b) => a.index - b.index);
+    return sorted.map((row) => row.embedding);
   }
 }

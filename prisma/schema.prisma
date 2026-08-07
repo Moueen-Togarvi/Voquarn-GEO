@@ -475,18 +475,27 @@ model Invitation {
 }
 
 model Brand {
-  id          String      @id @default(cuid())
-  name        String
-  websiteUrl  String
-  domain      String
-  description String
-  category    String
-  status      BrandStatus @default(ACTIVE)
+  id                 String      @id @default(cuid())
+  name               String
+  websiteUrl         String
+  domain             String
+  description        String
+  category           String
+  // Structured first-party research captured during onboarding. These fields
+  // ground competitor discovery and every generated AEO/GEO prompt in the
+  // client's actual offers, audiences, problems, and editorial footprint.
+  services           String[]    @default([])
+  audiences          String[]    @default([])
+  painPoints         String[]    @default([])
+  contentThemes      String[]    @default([])
+  differentiators    String[]    @default([])
+  discoveryPageCount Int         @default(0)
+  status             BrandStatus @default(ACTIVE)
   // IANA tz, e.g. "America/New_York" — distinct from Market.timezone, which
   // is where the audience is; this is where the team running the project is.
-  timezone    String?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  timezone           String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -921,7 +930,7 @@ model ProviderModelVersion {
 // "latest" row. rawSnapshotId points at the raw provider JSON (immutable,
 // content-addressed — see docs/adr/0005-storage-and-snapshots.md); this row
 // is the parsed summary huntSerpFetch's cache-check reads before spending a
-// DataForSEO credit on the same (keyword, market, device) again within TTL.
+// Scrape.do credits on the same (keyword, market, device) again within TTL.
 model SerpSnapshot {
   id          String       @id @default(cuid())
   device      MarketDevice

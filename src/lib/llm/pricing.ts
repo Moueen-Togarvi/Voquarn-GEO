@@ -12,19 +12,18 @@ export type PriceRate = {
 
 /**
  * Date-effective so a price change never rewrites the cost of a call made
- * under the old price — see docs/cost-model.md, which is currently a
- * template with no measured figures. These rates are explicit zero-cost
- * placeholders, not a real quote: filling them in with a plausible-looking
- * number would be worse than leaving them visibly unmeasured, because a
- * wrong number silently corrupts every margin calculation downstream.
+ * under an old price. GPT-5.6 Sol token rates below were verified against the
+ * official model page on the effective date. OpenAI web-search tool-call fees
+ * are not included here yet because LlmUsage currently tracks tokens only;
+ * docs/cost-model.md records that accounting limitation.
  */
 const RATES: PriceRate[] = [
   {
-    provider: "zai",
-    model: "glm-5.2",
-    effectiveFrom: "2026-01-01",
-    inputPerMillionTokens: 0,
-    outputPerMillionTokens: 0,
+    provider: "openai",
+    model: "gpt-5.6-sol",
+    effectiveFrom: "2026-08-07",
+    inputPerMillionTokens: 5,
+    outputPerMillionTokens: 30,
     currency: "USD",
   },
 ];

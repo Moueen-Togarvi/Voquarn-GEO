@@ -5,23 +5,81 @@ import {
   extractWebsiteSnapshot,
   UnsafeWebsiteError,
 } from "@/lib/discovery/website";
+import {
+  classifyWebsitePage,
+  extractInternalWebsiteLinks,
+  selectRepresentativeWebsiteUrls,
+} from "@/lib/discovery/site-profile";
 
 describe("automatic brand discovery", () => {
   it("builds research instructions from only company name and URL", () => {
     const messages = buildDiscoveryMessages(
       { name: "Voquarn", websiteUrl: "https://voquarn.com" },
       {
-        finalUrl: "https://voquarn.com",
-        title: "Voquarn GEO",
-        description: "AI visibility for SaaS teams",
-        text: "Measure how AI engines understand and mention your company.",
+        requestedUrl: "https://voquarn.com",
+        discoveredUrlCount: 4,
+        discoveredUrls: [
+          "https://voquarn.com/",
+          "https://voquarn.com/product",
+          "https://voquarn.com/blog",
+        ],
+        pages: [
+          {
+            finalUrl: "https://voquarn.com",
+            title: "Voquarn GEO",
+            description: "AI visibility for SaaS teams",
+            text: "Measure how AI engines understand and mention your company.",
+            kind: "HOME",
+          },
+        ],
       },
     );
 
+    expect(messages[0]?.content).toContain("first analyze");
     expect(messages[0]?.content).toContain("2 to 4 current, direct");
     expect(messages[0]?.content).toContain("Never include the target company");
     expect(messages[1]?.content).toContain("Company name: Voquarn");
     expect(messages[1]?.content).toContain("Voquarn GEO");
+  });
+
+  it("extracts only same-site HTTP links and removes tracking fragments", () => {
+    const links = extractInternalWebsiteLinks(
+      `<a href="/services?utm_source=x#top">Services</a>
+       <a href="https://blog.voquarn.com/guides/geo">Guide</a>
+       <a href="https://example.com/other">Other</a>
+       <a href="mailto:hello@voquarn.com">Email</a>`,
+      "https://www.voquarn.com/",
+    );
+
+    expect(links).toEqual([
+      "https://www.voquarn.com/services",
+      "https://blog.voquarn.com/guides/geo",
+    ]);
+  });
+
+  it("classifies and balances service and blog evidence", () => {
+    expect(classifyWebsitePage("https://acme.com/services/consulting")).toBe(
+      "PRODUCT_OR_SERVICE",
+    );
+    expect(classifyWebsitePage("https://acme.com/blog/aeo-guide")).toBe(
+      "BLOG_OR_RESOURCE",
+    );
+
+    const selected = selectRepresentativeWebsiteUrls(
+      [
+        ...Array.from(
+          { length: 20 },
+          (_, index) => `https://acme.com/blog/post-${index}`,
+        ),
+        "https://acme.com/services/strategy",
+        "https://acme.com/product/platform",
+      ],
+      "https://acme.com",
+      6,
+    );
+    expect(selected).toContain("https://acme.com/");
+    expect(selected).toContain("https://acme.com/services/strategy");
+    expect(selected.some((url) => url.includes("/blog/"))).toBe(true);
   });
 
   it("extracts useful visible evidence without scripts", () => {

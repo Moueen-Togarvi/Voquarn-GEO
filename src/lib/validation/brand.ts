@@ -97,6 +97,18 @@ export const brandInputSchema = z
       .trim()
       .min(3, "Use a specific category")
       .max(100, "Keep the category under 100 characters"),
+    services: z.array(z.string().trim().min(2).max(120)).max(12).optional(),
+    audiences: z.array(z.string().trim().min(2).max(120)).max(8).optional(),
+    painPoints: z.array(z.string().trim().min(2).max(120)).max(12).optional(),
+    contentThemes: z
+      .array(z.string().trim().min(2).max(120))
+      .max(12)
+      .optional(),
+    differentiators: z
+      .array(z.string().trim().min(2).max(120))
+      .max(8)
+      .optional(),
+    discoveryPageCount: z.number().int().min(0).max(100).optional(),
     competitors: z
       .array(competitorInputSchema)
       .min(2, "Add at least two competitors")
