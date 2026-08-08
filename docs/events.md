@@ -17,12 +17,13 @@ Schemas live in `src/lib/inngest/events.ts` via `EventSchemas.fromZod`.
 
 ### Phase 1a
 
-| Event                       | Payload                                                       | Emitted by                   |
-| --------------------------- | ------------------------------------------------------------- | ---------------------------- |
-| `brand/discovery.requested` | `workspaceId`, `brandId`, `operationId`, `websiteUrl`, `name` | `POST /api/brands`           |
-| `brand/discovery.completed` | `workspaceId`, `brandId`, `operationId`                       | `brandDiscovery`             |
-| `brand/discovery.failed`    | `workspaceId`, `brandId`, `operationId`, `errorCode`          | `brandDiscovery` `onFailure` |
-| `storage/snapshot.gc`       | —                                                             | cron                         |
+| Event                            | Payload                                                       | Emitted by                                                                    |
+| -------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `brand/discovery.requested`      | `workspaceId`, `brandId`, `operationId`, `websiteUrl`, `name` | `POST /api/brands`                                                            |
+| `brand/discovery.completed`      | `workspaceId`, `brandId`, `operationId`                       | `brandDiscovery`                                                              |
+| `brand/discovery.failed`         | `workspaceId`, `brandId`, `operationId`, `errorCode`          | `brandDiscovery` `onFailure`                                                  |
+| `competitor/expansion.requested` | `workspaceId`, `brandId`, `operationId`                       | `brandDiscovery` step; manual `POST /api/brands/[brandId]/competitors/expand` |
+| `storage/snapshot.gc`            | —                                                             | cron                                                                          |
 
 ### Phase 2
 
@@ -68,9 +69,10 @@ the Phase-1a migration.
 
 ## Operation kinds
 
-`BRAND_DISCOVERY`, `PROMPT_GENERATION`, `BENCHMARK_BATCH`, `SERP_HUNT`,
-`THREAT_SCORE`, `CRAWL`, `OPPORTUNITY_DETECT`, `CONTENT_BRIEF`, `CONTENT_DRAFT`,
-`PUBLICATION`, `GSC_IMPORT`, `WEEKLY_REPORT`.
+`BRAND_DISCOVERY`, `PROMPT_GENERATION`, `BENCHMARK_BATCH`,
+`COMPETITOR_EXPANSION`, `SERP_HUNT`, `THREAT_SCORE`, `CRAWL`,
+`OPPORTUNITY_DETECT`, `CONTENT_BRIEF`, `CONTENT_DRAFT`, `PUBLICATION`,
+`GSC_IMPORT`, `WEEKLY_REPORT`.
 
 Statuses: `PENDING → RUNNING → (COMPLETED | PARTIAL | FAILED | CANCELLED)`.
 

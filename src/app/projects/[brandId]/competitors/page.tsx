@@ -1,17 +1,16 @@
-import { ShieldAlert } from "lucide-react";
-import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getCompetitorMentionStats } from "@/lib/benchmark/service";
+import { CompetitorTable } from "@/components/competitor-table";
+import { CompetitorTierTabs } from "@/components/competitor-tier-tabs";
+import { FindMoreCompetitorsButton } from "@/components/find-more-competitors-button";
 import { PageHeader } from "@/components/page-header";
 import { RunHuntButton } from "@/components/run-hunt-button";
 import { requireWorkspaceContext } from "@/lib/auth/context";
 import { getBrand } from "@/lib/brands/service";
+import { groupCompetitorsByTier } from "@/lib/competitors/tiers";
 import { listCompetitorsWithLatestScore } from "@/lib/hunt/service";
 
 export const metadata = { title: "Competitors" };
-
-function formatScore(value: number | null | undefined): string {
-  return value == null ? "—" : Math.round(value).toString();
-}
 
 export default async function CompetitorsPage({
   params,
@@ -23,15 +22,24 @@ export default async function CompetitorsPage({
   const brand = await getBrand(ctx, brandId);
   if (!brand) notFound();
 
-  const competitors = await listCompetitorsWithLatestScore(ctx, brand.id);
+  const [competitors, mentionStats] = await Promise.all([
+    listCompetitorsWithLatestScore(ctx, brand.id),
+    getCompetitorMentionStats(ctx, brand.id),
+  ]);
+  const competitorsByTier = groupCompetitorsByTier(competitors);
 
   return (
     <div className="page-container">
       <PageHeader
         eyebrow="Intelligence"
         title="Competitors"
-        description="Threat scores are computed from SERP overlap, prominence, and AI-benchmark citation share — open a competitor to see the evidence behind its score."
-        action={<RunHuntButton brandId={brand.id} />}
+        description="Threat scores are computed from SERP overlap, prominence, and AI-benchmark citation share; visibility and mentions come from your AI-benchmark prompt runs. Open a competitor to see the evidence behind its score."
+        action={
+          <>
+            <FindMoreCompetitorsButton brandId={brand.id} />
+            <RunHuntButton brandId={brand.id} />
+          </>
+        }
       />
 
       {competitors.length === 0 ? (
@@ -41,34 +49,19 @@ export default async function CompetitorsPage({
         </p>
       ) : (
         <div className="content-card">
-          <ul className="batch-list">
-            {competitors.map((competitor) => (
-              <li key={competitor.id}>
-                <Link
-                  className="batch-row"
-                  href={`/projects/${brand.id}/competitors/${competitor.id}`}
-                >
-                  <span className="batch-status">
-                    <ShieldAlert size={16} />
-                  </span>
-                  <span className="batch-row-copy">
-                    <strong>{competitor.name}</strong>
-                    <small>{competitor.domain}</small>
-                  </span>
-                  <span className="batch-row-metric">
-                    <strong>
-                      {formatScore(competitor.latestScore?.value)}
-                    </strong>
-                    <small>
-                      {competitor.latestScore
-                        ? `${Math.round(competitor.latestScore.confidence * 100)}% confidence`
-                        : "not scored yet"}
-                    </small>
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <CompetitorTierTabs
+            panels={(["TOP", "MIDDLE", "BOTTOM"] as const).map((tier) => ({
+              tier,
+              count: competitorsByTier[tier].length,
+              content: (
+                <CompetitorTable
+                  competitors={competitorsByTier[tier]}
+                  mentionStats={mentionStats.stats}
+                  linkBase={(id) => `/projects/${brand.id}/competitors/${id}`}
+                />
+              ),
+            }))}
+          />
         </div>
       )}
     </div>

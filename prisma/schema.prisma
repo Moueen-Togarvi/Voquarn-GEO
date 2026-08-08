@@ -67,6 +67,7 @@ enum OperationKind {
   BRAND_DISCOVERY
   PROMPT_GENERATION
   BENCHMARK_BATCH
+  COMPETITOR_EXPANSION
   SERP_HUNT
   THREAT_SCORE
   CRAWL
@@ -346,17 +347,17 @@ model Workspace {
   webhookDeliveries      WebhookDelivery[]
   searchPerformanceRows  SearchPerformanceRow[]
 
-  crawlRuns            CrawlRun[]
-  pageSnapshots        PageSnapshot[]
-  pageObservations     PageObservation[]
-  schemaObservations   SchemaObservation[]
+  crawlRuns               CrawlRun[]
+  pageSnapshots           PageSnapshot[]
+  pageObservations        PageObservation[]
+  schemaObservations      SchemaObservation[]
   performanceObservations PerformanceObservation[]
 
-  opportunities         Opportunity[]
-  opportunityEvidence   OpportunityEvidence[]
-  opportunityDecisions  OpportunityDecision[]
-  conquestPlans         ConquestPlan[]
-  planItems             PlanItem[]
+  opportunities        Opportunity[]
+  opportunityEvidence  OpportunityEvidence[]
+  opportunityDecisions OpportunityDecision[]
+  conquestPlans        ConquestPlan[]
+  planItems            PlanItem[]
 
   contentItems    ContentItem[]
   researchPackets ResearchPacket[]
@@ -527,6 +528,12 @@ model Competitor {
   name        String
   websiteUrl  String
   domain      String
+  // 2-letter ISO 3166-1 alpha-2, LLM-inferred per competitor. Null for rows
+  // written before this column existed and for the original fast discovery
+  // path, which does not infer it — see docs/adr note in brand-profile.ts.
+  country     String?
+  // Null only for pre-migration rows; every write path from here on sets it.
+  tier        CompetitorTier?
   source      CompetitorSource @default(AI_DISCOVERED)
   status      CompetitorStatus @default(ACCEPTED)
   firstSeenAt DateTime         @default(now())
@@ -548,6 +555,13 @@ model Competitor {
   @@unique([brandId, domain])
   @@index([brandId])
   @@index([workspaceId])
+  @@index([brandId, tier])
+}
+
+enum CompetitorTier {
+  TOP
+  MIDDLE
+  BOTTOM
 }
 
 // Reusable within a workspace — "US, English, Desktop" is one value object
@@ -704,10 +718,10 @@ model Goal {
 // Phase 6) are a distinct, larger surface deferred until content generation
 // needs them.
 model BrandVoiceProfile {
-  id         String   @id @default(cuid())
-  tone       String?
-  audience   String?
-  guidelines String?
+  id              String   @id @default(cuid())
+  tone            String?
+  audience        String?
+  guidelines      String?
   // Phase 6: human-approved writing samples fed into brief/draft prompts as
   // voice reference — an array of {text, approvedAt}. Deliberately separate
   // from tone/audience/guidelines above: those are a human's *description*
@@ -1172,8 +1186,8 @@ model CrawlRun {
   competitorId String?
   competitor   Competitor? @relation(fields: [competitorId], references: [id], onDelete: Cascade)
 
-  operationId String     @unique
-  operation   Operation  @relation(fields: [operationId], references: [id], onDelete: Cascade)
+  operationId String    @unique
+  operation   Operation @relation(fields: [operationId], references: [id], onDelete: Cascade)
 
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)

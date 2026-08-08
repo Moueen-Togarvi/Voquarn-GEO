@@ -3,12 +3,23 @@
  * results for previously-analyzed answers. Stored on both RunAnalysis and
  * AnalysisBatch so a reader can tell whether two batches used the same
  * extractor. See docs/benchmark-protocol.md.
+ *
+ * v2: competitorMentions entries gained `position` (v1 only stored `count`,
+ * as a plain number). See normalizeCompetitorMentions() below for the
+ * shape-detecting adapter that lets both versions coexist in stored data
+ * without a backfill migration.
  */
-export const EXTRACTION_VERSION = "v1";
+export const EXTRACTION_VERSION = "v2";
 
 export type AliasEntity = {
   id: string;
   aliases: string[];
+};
+
+/** count is total occurrences; position is the entity's 1-based rank among every tracked entity actually mentioned (brand + competitors), null if this entity was not mentioned. */
+export type CompetitorMentionEntry = {
+  count: number;
+  position: number | null;
 };
 
 export type AnswerAnalysis = {
@@ -17,10 +28,40 @@ export type AnswerAnalysis = {
   firstMentionCharIndex: number | null;
   /** 1-based rank of the brand's first mention among every tracked entity actually mentioned. Null if the brand was not mentioned. */
   position: number | null;
-  /** competitorId -> mention count, over every competitor passed in, including zeros. */
-  competitorMentions: Record<string, number>;
+  /** competitorId -> mention data, over every competitor passed in, including zero-count entries. */
+  competitorMentions: Record<string, CompetitorMentionEntry>;
   refused: boolean;
 };
+
+/**
+ * Normalizes a stored RunAnalysis.competitorMentions JSON value, which may
+ * be either v1 shape (`Record<string, number>`) or v2 shape
+ * (`Record<string, CompetitorMentionEntry>`), into v2 shape uniformly.
+ * Detects by value shape rather than trusting an extractionVersion string,
+ * so it's correct even if a caller doesn't have that string handy. v1 rows
+ * report position as unavailable (null) rather than being backfilled.
+ */
+export function normalizeCompetitorMentions(
+  raw: unknown,
+): Record<string, CompetitorMentionEntry> {
+  if (!raw || typeof raw !== "object") return {};
+
+  const result: Record<string, CompetitorMentionEntry> = {};
+  for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value === "number") {
+      result[id] = { count: value, position: null };
+    } else if (
+      value &&
+      typeof value === "object" &&
+      "count" in value &&
+      typeof (value as { count: unknown }).count === "number"
+    ) {
+      const entry = value as { count: number; position?: number | null };
+      result[id] = { count: entry.count, position: entry.position ?? null };
+    }
+  }
+  return result;
+}
 
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -105,7 +146,7 @@ export function analyzeAnswer(
   const refused = detectRefusal(answerText);
   const brand = findMentions(answerText, brandAliases);
 
-  const competitorMentions: Record<string, number> = {};
+  const competitorMentions: Record<string, CompetitorMentionEntry> = {};
   const firstMentions: Array<{ id: string; index: number }> = [];
 
   if (brand.firstIndex !== null) {
@@ -114,7 +155,7 @@ export function analyzeAnswer(
 
   for (const competitor of competitors) {
     const result = findMentions(answerText, competitor.aliases);
-    competitorMentions[competitor.id] = result.count;
+    competitorMentions[competitor.id] = { count: result.count, position: null };
     if (result.firstIndex !== null) {
       firstMentions.push({ id: competitor.id, index: result.firstIndex });
     }
@@ -125,6 +166,12 @@ export function analyzeAnswer(
     brand.firstIndex !== null
       ? firstMentions.findIndex((entry) => entry.id === "__brand__") + 1
       : null;
+
+  firstMentions.forEach((entry, index) => {
+    if (entry.id !== "__brand__") {
+      competitorMentions[entry.id].position = index + 1;
+    }
+  });
 
   return {
     brandMentioned: brand.count > 0,

@@ -19,6 +19,14 @@ describe("isTransientDbError", () => {
     );
   });
 
+  it("treats a Prisma P2028 (transaction already closed) error as transient", () => {
+    const error = new Error(
+      "Transaction API error: Transaction already closed: A rollback cannot be executed on a committed transaction.",
+    ) as Error & { code: string };
+    error.code = "P2028";
+    expect(isTransientDbError(error)).toBe(true);
+  });
+
   it("does not treat an ordinary application Error as transient", () => {
     expect(isTransientDbError(new Error("Record not found"))).toBe(false);
   });

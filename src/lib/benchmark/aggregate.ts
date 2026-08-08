@@ -1,4 +1,5 @@
 import type { RunStatus, Sentiment } from "@/generated/prisma/enums";
+import type { CompetitorMentionEntry } from "@/lib/benchmark/analysis";
 
 export type RunOutcome = {
   status: RunStatus;
@@ -7,7 +8,8 @@ export type RunOutcome = {
   mentionCount?: number;
   position?: number | null;
   sentiment?: Sentiment;
-  competitorMentions?: Record<string, number>;
+  /** Normalize via normalizeCompetitorMentions() before constructing a RunOutcome — this type only accepts the v2 shape. */
+  competitorMentions?: Record<string, CompetitorMentionEntry>;
 };
 
 export type BenchmarkAggregateResult = {
@@ -20,7 +22,7 @@ export type BenchmarkAggregateResult = {
   failedCount: number;
 };
 
-function average(values: number[]): number | null {
+export function average(values: number[]): number | null {
   if (values.length === 0) return null;
   return values.reduce((total, value) => total + value, 0) / values.length;
 }
@@ -61,7 +63,7 @@ export function computeAggregate(runs: RunOutcome[]): BenchmarkAggregateResult {
     totalBrandMentions += run.mentionCount ?? (run.brandMentioned ? 1 : 0);
     totalCompetitorMentions += Object.values(
       run.competitorMentions ?? {},
-    ).reduce((total, count) => total + count, 0);
+    ).reduce((total, entry) => total + entry.count, 0);
   }
   const totalMentions = totalBrandMentions + totalCompetitorMentions;
   const shareOfVoice =
@@ -92,4 +94,64 @@ export function computeAggregate(runs: RunOutcome[]): BenchmarkAggregateResult {
     refusedCount,
     failedCount,
   };
+}
+
+export type CompetitorAggregateResult = {
+  competitorId: string;
+  mentionCount: number;
+  mentionedRunCount: number;
+  visibility: number | null;
+  shareOfVoice: number | null;
+  avgPosition: number | null;
+};
+
+/**
+ * Same scored/denominator basis as computeAggregate(), applied per
+ * competitor instead of to the brand — visibility and shareOfVoice for a
+ * competitor are directly comparable to the brand's own numbers because
+ * both are computed over the identical run set with the identical
+ * definitions.
+ */
+export function computeCompetitorAggregates(
+  runs: RunOutcome[],
+  competitorIds: string[],
+): Record<string, CompetitorAggregateResult> {
+  const scored = runs.filter(
+    (run) => run.status === "COMPLETED" && !run.refused,
+  );
+
+  let totalMentions = 0;
+  for (const run of scored) {
+    totalMentions += run.mentionCount ?? (run.brandMentioned ? 1 : 0);
+    totalMentions += Object.values(run.competitorMentions ?? {}).reduce(
+      (total, entry) => total + entry.count,
+      0,
+    );
+  }
+
+  const results: Record<string, CompetitorAggregateResult> = {};
+  for (const competitorId of competitorIds) {
+    let mentionCount = 0;
+    let mentionedRunCount = 0;
+    const positions: number[] = [];
+
+    for (const run of scored) {
+      const entry = run.competitorMentions?.[competitorId];
+      if (!entry || entry.count === 0) continue;
+      mentionCount += entry.count;
+      mentionedRunCount += 1;
+      if (typeof entry.position === "number") positions.push(entry.position);
+    }
+
+    results[competitorId] = {
+      competitorId,
+      mentionCount,
+      mentionedRunCount,
+      visibility: scored.length > 0 ? mentionedRunCount / scored.length : null,
+      shareOfVoice: totalMentions > 0 ? mentionCount / totalMentions : null,
+      avgPosition: average(positions),
+    };
+  }
+
+  return results;
 }

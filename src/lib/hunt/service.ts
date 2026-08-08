@@ -55,6 +55,8 @@ function toCompetitorSummary(competitor: Competitor) {
     name: competitor.name,
     websiteUrl: competitor.websiteUrl,
     domain: competitor.domain,
+    country: competitor.country,
+    tier: competitor.tier,
     status: competitor.status,
   };
 }
@@ -248,7 +250,8 @@ async function getBenchmarkMentionTotals(
   for (const run of detail.runs) {
     if (!run.analysis || run.analysis.refused) continue;
     brandMentions += run.analysis.mentionCount;
-    competitorMentions += run.analysis.competitorMentions[competitorId] ?? 0;
+    competitorMentions +=
+      run.analysis.competitorMentions[competitorId]?.count ?? 0;
   }
 
   return { competitorMentions, brandMentions };

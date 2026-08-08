@@ -1,17 +1,33 @@
 "use client";
 
-import { Check, X } from "lucide-react";
-import { useActionState, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useActionState, useEffect, useRef, useState } from "react";
 import {
   saveReviewAction,
   type ReviewFormState,
 } from "@/app/onboarding/review/[brandId]/actions";
+import { CompetitorTable } from "@/components/competitor-table";
+import { CompetitorTierTabs } from "@/components/competitor-tier-tabs";
+import {
+  OperationProgress,
+  useOperationPolling,
+} from "@/components/operation-progress";
+import { TagList } from "@/components/tag-list";
 import type { BrandDto } from "@/lib/brands/types";
-import { cn } from "@/lib/utils";
+import { groupCompetitorsByTier } from "@/lib/competitors/tiers";
 
 const initialState: ReviewFormState = {};
 
-export function CompetitorReview({ brand }: { brand: BrandDto }) {
+export function CompetitorReview({
+  brand,
+  sourceCount,
+  initialExpansionOperationId,
+}: {
+  brand: BrandDto;
+  sourceCount: number | null;
+  initialExpansionOperationId: string | null;
+}) {
+  const router = useRouter();
   const [state, formAction, pending] = useActionState(
     saveReviewAction,
     initialState,
@@ -25,6 +41,38 @@ export function CompetitorReview({ brand }: { brand: BrandDto }) {
       ),
   );
 
+  // Competitor expansion backfills more rows into brand.competitors after
+  // this component has already mounted (via router.refresh() below), so
+  // acceptedIds' one-time initializer above never sees them. Newly-arrived
+  // rows default to accepted, same as the ones present on first render.
+  const knownIdsRef = useRef(new Set(brand.competitors.map((c) => c.id)));
+  useEffect(() => {
+    const arrivals = brand.competitors.filter(
+      (competitor) => !knownIdsRef.current.has(competitor.id),
+    );
+    if (arrivals.length > 0) {
+      setAcceptedIds((current) => {
+        const next = new Set(current);
+        for (const competitor of arrivals) {
+          if (competitor.status !== "IGNORED") next.add(competitor.id);
+        }
+        return next;
+      });
+      knownIdsRef.current = new Set(brand.competitors.map((c) => c.id));
+    }
+  }, [brand.competitors]);
+
+  const [expansionOperationId, setExpansionOperationId] = useState(
+    initialExpansionOperationId,
+  );
+  const { operation: expansionOperation } = useOperationPolling(
+    expansionOperationId,
+    () => {
+      setExpansionOperationId(null);
+      router.refresh();
+    },
+  );
+
   function toggle(id: string) {
     setAcceptedIds((current) => {
       const next = new Set(current);
@@ -36,6 +84,8 @@ export function CompetitorReview({ brand }: { brand: BrandDto }) {
       return next;
     });
   }
+
+  const competitorsByTier = groupCompetitorsByTier(brand.competitors);
 
   return (
     <form action={formAction} className="brand-form" noValidate>
@@ -96,31 +146,20 @@ export function CompetitorReview({ brand }: { brand: BrandDto }) {
             ) : null}
           </label>
         </div>
-        <div className="research-profile-grid">
-          {[
-            ["Products & services", brand.services],
-            ["Target audiences", brand.audiences],
-            ["Buyer pain points", brand.painPoints],
-            ["Blog & resource themes", brand.contentThemes],
-            ["Differentiators", brand.differentiators],
-          ].map(([label, items]) => (
-            <div className="research-profile-group" key={label as string}>
-              <span>{label as string}</span>
-              {(items as string[]).length > 0 ? (
-                <ul>
-                  {(items as string[]).map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              ) : (
-                <small>No reliable evidence found.</small>
-              )}
-            </div>
-          ))}
-        </div>
+        <TagList
+          groups={[
+            { label: "Products & services", items: brand.services },
+            { label: "Target audiences", items: brand.audiences },
+            { label: "Buyer pain points", items: brand.painPoints },
+            { label: "Blog & resource themes", items: brand.contentThemes },
+            { label: "Differentiators", items: brand.differentiators },
+          ]}
+        />
         <p className="research-page-count">
           Profile grounded in {brand.discoveryPageCount} website page
-          {brand.discoveryPageCount === 1 ? "" : "s"} plus OpenAI web research.
+          {brand.discoveryPageCount === 1 ? "" : "s"}
+          {sourceCount != null ? ` and ${sourceCount} web sources` : ""} from
+          OpenAI web research.
         </p>
       </section>
 
@@ -130,42 +169,29 @@ export function CompetitorReview({ brand }: { brand: BrandDto }) {
           <div>
             <h2>Competitors</h2>
             <p>
-              Tap a competitor to stop tracking it. You can add more later from
-              project settings.
+              Toggle a competitor&apos;s tracking status. Top, Middle, and
+              Bottom tiers reflect how closely each one competes with you.
             </p>
           </div>
         </div>
-        <div className="competitor-review-grid">
-          {brand.competitors.map((competitor) => {
-            const accepted = acceptedIds.has(competitor.id);
-            return (
-              <button
-                type="button"
-                key={competitor.id}
-                className={cn("competitor-toggle", accepted && "is-accepted")}
-                onClick={() => toggle(competitor.id)}
-                aria-pressed={accepted}
-                disabled={pending}
-              >
-                <span>
-                  <strong>{competitor.name}</strong>
-                  <small>{competitor.domain}</small>
-                </span>
-                <span className="status-pill">
-                  {accepted ? (
-                    <>
-                      <Check size={12} /> Tracking
-                    </>
-                  ) : (
-                    <>
-                      <X size={12} /> Ignored
-                    </>
-                  )}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        {expansionOperationId ? (
+          <OperationProgress
+            operation={expansionOperation}
+            label="Finding more competitors…"
+          />
+        ) : null}
+        <CompetitorTierTabs
+          panels={(["TOP", "MIDDLE", "BOTTOM"] as const).map((tier) => ({
+            tier,
+            count: competitorsByTier[tier].length,
+            content: (
+              <CompetitorTable
+                competitors={competitorsByTier[tier]}
+                review={{ acceptedIds, onToggle: toggle, pending }}
+              />
+            ),
+          }))}
+        />
       </section>
 
       <div className="form-actions">

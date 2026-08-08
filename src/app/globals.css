@@ -151,6 +151,11 @@ textarea:focus-visible,
   opacity: 0.28;
   cursor: not-allowed;
 }
+.icon-button-sm {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+}
 .danger-hover:not(:disabled):hover {
   color: var(--danger);
   background: var(--danger-soft);
@@ -463,7 +468,13 @@ textarea:focus-visible,
   border-radius: 10px;
   background: var(--surface-soft);
 }
-.research-profile-group > span,
+.research-profile-group-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.research-profile-group-heading span,
 .research-page-count {
   color: var(--faint);
   font-size: 11px;
@@ -480,7 +491,10 @@ textarea:focus-visible,
   list-style: none;
 }
 .research-profile-group li {
-  padding: 5px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 6px 5px 8px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: #fff;
@@ -628,6 +642,37 @@ textarea:focus-visible,
   border-color: #c8c4ef;
   background: #fff;
   color: var(--violet);
+}
+.competitor-tier-tabs-root {
+  display: grid;
+  gap: 14px;
+}
+.competitor-tier-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  width: fit-content;
+}
+.competitor-tier-tab {
+  padding: 7px 14px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.competitor-tier-tab[data-state="active"] {
+  background: #fff;
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+.competitor-tier-tab-panel {
+  outline: none;
 }
 .automatic-research-note,
 .research-progress {
@@ -1196,6 +1241,17 @@ button.nav-item {
   color: var(--success);
   background: var(--success-soft);
   border-color: transparent;
+}
+button.status-pill {
+  cursor: pointer;
+  transition: 150ms ease;
+}
+button.status-pill:hover {
+  border-color: var(--border-strong);
+}
+button.status-pill:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
 }
 .capability-row {
   display: flex;

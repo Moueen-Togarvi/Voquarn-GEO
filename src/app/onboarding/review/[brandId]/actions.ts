@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireWorkspaceContext } from "@/lib/auth/context";
 import { updateDraftProfile } from "@/lib/brands/service";
-import { updateCompetitorStatus } from "@/lib/competitors/service";
+import { bulkUpdateCompetitorStatus } from "@/lib/competitors/service";
 
 const reviewSchema = z.object({
   brandId: z.string().min(1),
@@ -40,6 +40,7 @@ export async function saveReviewAction(
     formData.getAll("acceptedCompetitorIds").map(String),
   );
   const allCompetitorIds = formData.getAll("allCompetitorIds").map(String);
+  const ignoredIds = allCompetitorIds.filter((id) => !acceptedIds.has(id));
 
   let redirectTo: string | null = null;
   try {
@@ -48,13 +49,10 @@ export async function saveReviewAction(
       category: parsed.data.category,
     });
 
-    for (const competitorId of allCompetitorIds) {
-      await updateCompetitorStatus(
-        ctx,
-        competitorId,
-        acceptedIds.has(competitorId) ? "ACCEPTED" : "IGNORED",
-      );
-    }
+    await bulkUpdateCompetitorStatus(ctx, {
+      acceptedIds: [...acceptedIds],
+      ignoredIds,
+    });
 
     redirectTo = `/onboarding/market/${parsed.data.brandId}`;
   } catch (error) {

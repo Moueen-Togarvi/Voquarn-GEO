@@ -3,6 +3,7 @@ import type {
   RunStatus,
   Sentiment,
 } from "@/generated/prisma/enums";
+import type { CompetitorMentionEntry } from "@/lib/benchmark/analysis";
 
 export type AnalysisBatchDto = {
   id: string;
@@ -30,7 +31,7 @@ export type RunAnalysisDto = {
   sentiment: Sentiment;
   refused: boolean;
   confidence: number;
-  competitorMentions: Record<string, number>;
+  competitorMentions: Record<string, CompetitorMentionEntry>;
 };
 
 export type PromptRunDto = {

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { computeAggregate, type RunOutcome } from "@/lib/benchmark/aggregate";
+import {
+  computeAggregate,
+  computeCompetitorAggregates,
+  type RunOutcome,
+} from "@/lib/benchmark/aggregate";
 
 function run(overrides: Partial<RunOutcome>): RunOutcome {
   return { status: "COMPLETED", ...overrides };
@@ -59,12 +63,15 @@ describe("computeAggregate", () => {
       run({
         brandMentioned: true,
         mentionCount: 2,
-        competitorMentions: { "comp-1": 1, "comp-2": 1 },
+        competitorMentions: {
+          "comp-1": { count: 1, position: 2 },
+          "comp-2": { count: 1, position: 3 },
+        },
       }),
       run({
         brandMentioned: false,
         mentionCount: 0,
-        competitorMentions: { "comp-1": 3 },
+        competitorMentions: { "comp-1": { count: 3, position: 1 } },
       }),
     ]);
     // brand: 2, competitors: 1 + 1 + 3 = 5, total 7 -> 2/7
@@ -106,5 +113,71 @@ describe("computeAggregate", () => {
     const result = computeAggregate([run({ status: "PENDING" })]);
     expect(result.visibility).toBeNull();
     expect(result.sampleSize).toBe(0);
+  });
+});
+
+describe("computeCompetitorAggregates", () => {
+  it("returns null ratios for a competitor never mentioned", () => {
+    const result = computeCompetitorAggregates(
+      [run({ brandMentioned: true, mentionCount: 1 })],
+      ["comp-1"],
+    );
+    expect(result["comp-1"]).toEqual({
+      competitorId: "comp-1",
+      mentionCount: 0,
+      mentionedRunCount: 0,
+      visibility: 0,
+      shareOfVoice: 0,
+      avgPosition: null,
+    });
+  });
+
+  it("computes visibility, shareOfVoice, and avgPosition on the same basis as the brand", () => {
+    const runs = [
+      run({
+        brandMentioned: true,
+        mentionCount: 1,
+        competitorMentions: { "comp-1": { count: 1, position: 2 } },
+      }),
+      run({
+        brandMentioned: false,
+        mentionCount: 0,
+        competitorMentions: { "comp-1": { count: 2, position: 1 } },
+      }),
+      run({
+        brandMentioned: false,
+        mentionCount: 0,
+        competitorMentions: { "comp-1": { count: 0, position: null } },
+      }),
+    ];
+    const result = computeCompetitorAggregates(runs, ["comp-1"]);
+    // brand total: 1, comp-1 total: 1 + 2 = 3, overall total 4
+    expect(result["comp-1"]).toEqual({
+      competitorId: "comp-1",
+      mentionCount: 3,
+      mentionedRunCount: 2,
+      visibility: 2 / 3,
+      shareOfVoice: 3 / 4,
+      avgPosition: 1.5,
+    });
+  });
+
+  it("excludes refused and non-completed runs, matching computeAggregate's scored set", () => {
+    const result = computeCompetitorAggregates(
+      [
+        run({
+          brandMentioned: false,
+          competitorMentions: { "comp-1": { count: 5, position: 1 } },
+          refused: true,
+        }),
+        run({
+          status: "FAILED",
+          competitorMentions: { "comp-1": { count: 5, position: 1 } },
+        }),
+      ],
+      ["comp-1"],
+    );
+    expect(result["comp-1"].mentionCount).toBe(0);
+    expect(result["comp-1"].visibility).toBeNull();
   });
 });

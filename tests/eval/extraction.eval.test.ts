@@ -73,7 +73,7 @@ describe("eval: analyzeAnswer extraction", () => {
       for (const [competitorId, expectedCount] of Object.entries(
         fixture.expected.competitorMentions,
       )) {
-        const actual = result.competitorMentions[competitorId] ?? 0;
+        const actual = result.competitorMentions[competitorId]?.count ?? 0;
         if (actual !== expectedCount) {
           mismatches.push(
             `${fixture.id}: competitor ${competitorId} expected ${expectedCount}, got ${actual}`,

@@ -46,7 +46,7 @@ export function domainFromUrl(value: string): string {
   return hostname ? registrableDomain(hostname) : "";
 }
 
-const websiteUrlSchema = z
+export const websiteUrlSchema = z
   .preprocess(
     (value) => (typeof value === "string" ? withProtocol(value) : value),
     z

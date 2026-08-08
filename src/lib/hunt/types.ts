@@ -1,4 +1,8 @@
-import type { CompetitorStatus, MarketDevice } from "@/generated/prisma/enums";
+import type {
+  CompetitorStatus,
+  CompetitorTier,
+  MarketDevice,
+} from "@/generated/prisma/enums";
 import type {
   ThreatComponentBreakdown,
   ThreatComponentId,
@@ -27,6 +31,8 @@ export type CompetitorWithScoreDto = {
   name: string;
   websiteUrl: string;
   domain: string;
+  country: string | null;
+  tier: CompetitorTier | null;
   status: CompetitorStatus;
   latestScore: ThreatScoreDto | null;
 };

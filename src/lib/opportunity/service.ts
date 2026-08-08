@@ -201,7 +201,7 @@ export async function getBenchmarkCitationShares(
     for (const competitor of competitors) {
       competitorMentions[competitor.id] =
         (competitorMentions[competitor.id] ?? 0) +
-        (run.analysis.competitorMentions[competitor.id] ?? 0);
+        (run.analysis.competitorMentions[competitor.id]?.count ?? 0);
     }
   }
 

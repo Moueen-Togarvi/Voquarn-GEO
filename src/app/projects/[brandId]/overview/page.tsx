@@ -8,9 +8,13 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getLatestAggregate } from "@/lib/benchmark/service";
+import {
+  getCompetitorMentionStats,
+  getLatestAggregate,
+} from "@/lib/benchmark/service";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
+import { TagList } from "@/components/tag-list";
 import { requireWorkspaceContext } from "@/lib/auth/context";
 import { getBrand } from "@/lib/brands/service";
 import { resolveDefault } from "@/lib/llm/registry";
@@ -42,15 +46,31 @@ export default async function OverviewPage({
   const brand = await getBrand(ctx, brandId);
   if (!brand) notFound();
 
-  const [activePrompts, latest] = await Promise.all([
+  const [activePrompts, latest, mentionStats] = await Promise.all([
     listActivePrompts(ctx, brand.id),
     getLatestAggregate(ctx, brand.id),
+    getCompetitorMentionStats(ctx, brand.id),
   ]);
   const model = resolveDefault("benchmark");
 
   const hasPrompts = activePrompts.length > 0;
   const hasRun = latest !== null;
   const stepsComplete = 1 + Number(hasPrompts) + Number(hasRun);
+
+  const topTierCount = brand.competitors.filter(
+    (competitor) => competitor.tier === "TOP",
+  ).length;
+  const topMention = Object.values(mentionStats.stats)
+    .filter((stat) => stat.mentionCount > 0)
+    .sort((a, b) => b.mentionCount - a.mentionCount)[0];
+  const mostMentioned = topMention
+    ? {
+        mentionCount: topMention.mentionCount,
+        competitor: brand.competitors.find(
+          (c) => c.id === topMention.competitorId,
+        ),
+      }
+    : null;
 
   return (
     <div className="page-container">
@@ -92,6 +112,24 @@ export default async function OverviewPage({
               : "—"
           }
           caption="Average mention order"
+        />
+      </section>
+
+      <section className="content-card">
+        <div className="card-heading">
+          <div>
+            <p className="page-eyebrow">Profile</p>
+            <h2>What we know about {brand.name}</h2>
+          </div>
+        </div>
+        <TagList
+          groups={[
+            { label: "Products & services", items: brand.services },
+            { label: "Target audiences", items: brand.audiences },
+            { label: "Buyer pain points", items: brand.painPoints },
+            { label: "Blog & resource themes", items: brand.contentThemes },
+            { label: "Differentiators", items: brand.differentiators },
+          ]}
         />
       </section>
 
@@ -163,9 +201,21 @@ export default async function OverviewPage({
             <div>
               <dt>Competitors</dt>
               <dd>
-                <Users size={15} /> {brand.competitors.length} tracked
+                <Users size={15} /> {brand.competitors.length} tracked (
+                {topTierCount} top-tier)
               </dd>
             </div>
+            {mostMentioned?.competitor ? (
+              <div>
+                <dt>Most mentioned</dt>
+                <dd>
+                  <Link href={`/projects/${brand.id}/competitors`}>
+                    {mostMentioned.competitor.name}
+                  </Link>{" "}
+                  ({mostMentioned.mentionCount} mentions)
+                </dd>
+              </div>
+            ) : null}
             <div>
               <dt>Prompts</dt>
               <dd>

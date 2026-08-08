@@ -10,7 +10,7 @@ import type { WebsiteProfileSnapshot } from "@/lib/discovery/site-profile";
 
 const conciseItem = z.string().trim().min(2).max(120);
 
-function isPlausibleUrl(value: string): boolean {
+export function isPlausibleUrl(value: string): boolean {
   try {
     const url = new URL(value);
     return url.protocol === "http:" || url.protocol === "https:";

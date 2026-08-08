@@ -34,7 +34,10 @@ describe("analyzeAnswer", () => {
     expect(result.mentionCount).toBe(0);
     expect(result.firstMentionCharIndex).toBeNull();
     expect(result.position).toBeNull();
-    expect(result.competitorMentions["comp-1"]).toBe(1);
+    expect(result.competitorMentions["comp-1"]).toEqual({
+      count: 1,
+      position: 1,
+    });
   });
 
   it("ranks position by first-mention order across brand and competitors", () => {
@@ -46,9 +49,13 @@ describe("analyzeAnswer", () => {
         { id: "comp-2", aliases: ["Search Scope"] },
       ],
     );
-    // Market Signal (index 0) mentioned before Voquarn -> Voquarn is 2nd.
+    // Market Signal (index 0) mentioned before Voquarn -> Voquarn is 2nd,
+    // Search Scope mentioned last -> 3rd.
     expect(result.position).toBe(2);
-    expect(result.competitorMentions).toEqual({ "comp-1": 1, "comp-2": 1 });
+    expect(result.competitorMentions).toEqual({
+      "comp-1": { count: 1, position: 1 },
+      "comp-2": { count: 1, position: 3 },
+    });
   });
 
   it("is case-insensitive and uses word boundaries, not substring matching", () => {
@@ -69,7 +76,9 @@ describe("analyzeAnswer", () => {
       ["Voquarn"],
       [{ id: "comp-1", aliases: ["Market Signal"] }],
     );
-    expect(result.competitorMentions).toEqual({ "comp-1": 0 });
+    expect(result.competitorMentions).toEqual({
+      "comp-1": { count: 0, position: null },
+    });
   });
 
   it("escapes regex-special characters in aliases", () => {

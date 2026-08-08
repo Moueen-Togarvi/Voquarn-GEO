@@ -2,6 +2,7 @@ import type {
   BrandStatus,
   CompetitorSource,
   CompetitorStatus,
+  CompetitorTier,
 } from "@/generated/prisma/enums";
 import type { BrandInput } from "@/lib/validation/brand";
 
@@ -10,6 +11,8 @@ export type CompetitorDto = {
   name: string;
   websiteUrl: string;
   domain: string;
+  country: string | null;
+  tier: CompetitorTier | null;
   status: CompetitorStatus;
   source: CompetitorSource;
 };

@@ -10,8 +10,14 @@ import { assertRole, type WorkspaceContext } from "@/lib/auth/context";
 import {
   type AnswerAnalysis,
   EXTRACTION_VERSION,
+  normalizeCompetitorMentions,
 } from "@/lib/benchmark/analysis";
-import { computeAggregate, type RunOutcome } from "@/lib/benchmark/aggregate";
+import {
+  computeAggregate,
+  computeCompetitorAggregates,
+  type CompetitorAggregateResult,
+  type RunOutcome,
+} from "@/lib/benchmark/aggregate";
 import { computePromptSetHash } from "@/lib/benchmark/prompt-set-hash";
 import type {
   AnalysisBatchDto,
@@ -92,7 +98,9 @@ function toRunAnalysisDto(analysis: RunAnalysis): RunAnalysisDto {
     sentiment: analysis.sentiment,
     refused: analysis.refused,
     confidence: analysis.confidence,
-    competitorMentions: analysis.competitorMentions as Record<string, number>,
+    competitorMentions: normalizeCompetitorMentions(
+      analysis.competitorMentions,
+    ),
   };
 }
 
@@ -412,8 +420,9 @@ export async function finalizeBatch(
     mentionCount: run.analysis?.mentionCount,
     position: run.analysis?.position,
     sentiment: run.analysis?.sentiment,
-    competitorMentions: run.analysis?.competitorMentions as
-      Record<string, number> | undefined,
+    competitorMentions: run.analysis
+      ? normalizeCompetitorMentions(run.analysis.competitorMentions)
+      : undefined,
   }));
   const result = computeAggregate(outcomes);
 
@@ -444,4 +453,93 @@ export async function finalizeBatch(
     batch: toBatchDto(updatedBatch),
     aggregate: toAggregateDto(aggregate),
   };
+}
+
+/**
+ * Per-competitor visibility/shareOfVoice/position, mirroring
+ * getLatestAggregate()'s "most recent batch, regardless of status" choice —
+ * a PARTIAL_FAILURE batch's data is still real and reportable. Returns an
+ * empty map (not null) when there is no batch yet, so callers can render
+ * "not measured yet" per competitor without a separate null check.
+ */
+export async function getCompetitorMentionStats(
+  ctx: WorkspaceContext,
+  brandId: string,
+  batchId?: string,
+): Promise<{
+  batchId: string | null;
+  stats: Record<string, CompetitorAggregateResult>;
+}> {
+  const batch = batchId
+    ? await scopedDb(ctx).analysisBatch.findFirst({
+        where: { id: batchId, brandId },
+        include: { runs: { include: { analysis: true } } },
+      })
+    : await scopedDb(ctx).analysisBatch.findFirst({
+        where: { brandId, completedAt: { not: null } },
+        include: { runs: { include: { analysis: true } } },
+        orderBy: { completedAt: "desc" },
+      });
+
+  if (!batch) return { batchId: null, stats: {} };
+
+  const competitors = await scopedDb(ctx).competitor.findMany({
+    where: { brandId },
+    select: { id: true },
+  });
+
+  const outcomes: RunOutcome[] = batch.runs.map((run) => ({
+    status: run.status,
+    refused: run.analysis?.refused,
+    brandMentioned: run.analysis?.brandMentioned,
+    mentionCount: run.analysis?.mentionCount,
+    competitorMentions: run.analysis
+      ? normalizeCompetitorMentions(run.analysis.competitorMentions)
+      : undefined,
+  }));
+
+  return {
+    batchId: batch.id,
+    stats: computeCompetitorAggregates(
+      outcomes,
+      competitors.map((c) => c.id),
+    ),
+  };
+}
+
+/** The prompt-level drill-down for a single competitor's mentions within one batch — "these specific prompts caused this competitor to be mentioned." */
+export async function listPromptsMentioningCompetitor(
+  ctx: WorkspaceContext,
+  competitorId: string,
+  batchId: string,
+): Promise<
+  Array<{
+    promptId: string;
+    promptText: string;
+    runId: string;
+    mentionCount: number;
+  }>
+> {
+  const runs = await scopedDb(ctx).promptRun.findMany({
+    where: { batchId, status: "COMPLETED", analysis: { isNot: null } },
+    include: { prompt: { select: { text: true } }, analysis: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return runs
+    .map((run) => {
+      const mentions = normalizeCompetitorMentions(
+        run.analysis?.competitorMentions,
+      );
+      const entry = mentions[competitorId];
+      return entry && entry.count > 0
+        ? {
+            promptId: run.promptId,
+            promptText: run.prompt.text,
+            runId: run.id,
+            mentionCount: entry.count,
+          }
+        : null;
+    })
+    .filter((row): row is NonNullable<typeof row> => row !== null);
 }

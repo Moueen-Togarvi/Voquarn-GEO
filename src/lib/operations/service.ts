@@ -81,6 +81,20 @@ export async function getOperation(
   return operation ? toOperationDto(operation) : null;
 }
 
+/** Lets a page start polling an operation that was kicked off by another function (e.g. the review page picking up the COMPETITOR_EXPANSION operation that brandDiscovery auto-fires) without needing the id passed through an event response. */
+export async function getLatestOperationForBrand(
+  ctx: WorkspaceContext,
+  brandId: string,
+  kind: OperationKind,
+): Promise<OperationDto | null> {
+  const operation = await scopedDb(ctx).operation.findFirst({
+    where: { brandId, kind },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return operation ? toOperationDto(operation) : null;
+}
+
 export async function startOperation(
   ctx: WorkspaceContext,
   operationId: string,

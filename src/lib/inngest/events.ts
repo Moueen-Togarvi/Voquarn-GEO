@@ -57,6 +57,17 @@ export const promptsGenerationRequested = eventType(
   { schema: promptsGenerationRequestedSchema },
 );
 
+export const competitorExpansionRequestedSchema = z.object({
+  workspaceId: z.string(),
+  brandId: z.string(),
+  operationId: z.string(),
+});
+
+export const competitorExpansionRequested = eventType(
+  "competitor/expansion.requested",
+  { schema: competitorExpansionRequestedSchema },
+);
+
 export const benchmarkBatchRequestedSchema = z.object({
   workspaceId: z.string(),
   brandId: z.string(),

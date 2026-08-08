@@ -16,6 +16,8 @@ function toCompetitorDto(competitor: Competitor): CompetitorDto {
     name: competitor.name,
     websiteUrl: competitor.websiteUrl,
     domain: competitor.domain,
+    country: competitor.country,
+    tier: competitor.tier,
     status: competitor.status,
     source: competitor.source,
   };
@@ -112,6 +114,10 @@ export async function createBrand(
       discoveryPageCount: input.discoveryPageCount ?? 0,
       status: "DRAFT",
       competitors: {
+        // Discovery's own prompt defines these as "current, direct product
+        // competitors that solve the same core job for the same buyer" —
+        // that's definitionally the Top tier, so every competitor from this
+        // fast path is tagged TOP rather than left untiered.
         create: input.competitors.map((competitor) => ({
           name: competitor.name,
           websiteUrl: competitor.websiteUrl,
@@ -119,6 +125,7 @@ export async function createBrand(
           workspaceId: ctx.workspaceId,
           source: "AI_DISCOVERED",
           status: "CANDIDATE",
+          tier: "TOP",
         })),
       },
     },
@@ -182,6 +189,9 @@ export async function updateBrand(
       discoveryPageCount: input.discoveryPageCount,
       competitors: {
         deleteMany: toDelete.length > 0 ? { id: { in: toDelete } } : undefined,
+        // Same TOP tagging as createBrand() — these are re-analysis's primary
+        // competitors, still the fast/small discovery path, not the
+        // expanded tier set (see src/lib/competitors/service.ts).
         upsert: input.competitors.map((competitor) => {
           const domain = domainFromUrl(competitor.websiteUrl);
           return {
@@ -189,12 +199,14 @@ export async function updateBrand(
             update: {
               name: competitor.name,
               websiteUrl: competitor.websiteUrl,
+              tier: "TOP",
             },
             create: {
               name: competitor.name,
               websiteUrl: competitor.websiteUrl,
               domain,
               workspaceId: ctx.workspaceId,
+              tier: "TOP",
             },
           };
         }),

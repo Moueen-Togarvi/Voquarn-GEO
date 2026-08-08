@@ -1,14 +1,19 @@
 "use client";
 
-import { Check, Globe2, Search, Sparkles } from "lucide-react";
+import { Check, Search, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { CompetitorTable } from "@/components/competitor-table";
+import { CompetitorTierTabs } from "@/components/competitor-tier-tabs";
+import { FindMoreCompetitorsButton } from "@/components/find-more-competitors-button";
 import {
   OperationProgress,
   useOperationPolling,
 } from "@/components/operation-progress";
+import { TagList } from "@/components/tag-list";
 import type { ApiAccepted, ApiFailure } from "@/lib/api/types";
 import type { BrandDto } from "@/lib/brands/types";
+import { groupCompetitorsByTier } from "@/lib/competitors/tiers";
 import type { OperationDto } from "@/lib/operations/types";
 import { brandDiscoveryInputSchema } from "@/lib/validation/brand";
 
@@ -151,42 +156,38 @@ export function BrandForm({ brand }: { brand?: BrandDto }) {
               <strong>{brand.category}</strong>
             </div>
           </div>
-          <div className="research-profile-grid compact">
-            {[
-              ["Products & services", brand.services],
-              ["Audiences", brand.audiences],
-              ["Pain points", brand.painPoints],
-              ["Content themes", brand.contentThemes],
-              ["Differentiators", brand.differentiators],
-            ].map(([label, items]) => (
-              <div className="research-profile-group" key={label as string}>
-                <span>{label as string}</span>
-                <ul>
-                  {(items as string[]).map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
+          <TagList
+            compact
+            groups={[
+              { label: "Products & services", items: brand.services },
+              { label: "Audiences", items: brand.audiences },
+              { label: "Pain points", items: brand.painPoints },
+              { label: "Content themes", items: brand.contentThemes },
+              { label: "Differentiators", items: brand.differentiators },
+            ]}
+          />
           <div className="discovered-competitors">
-            <span>Direct competitors</span>
-            <div>
-              {brand.competitors.map((competitor) => (
-                <a
-                  href={competitor.websiteUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  key={competitor.id}
-                >
-                  <Globe2 size={15} />
-                  <span>
-                    <strong>{competitor.name}</strong>
-                    <small>{competitor.domain}</small>
-                  </span>
-                </a>
-              ))}
-            </div>
+            <span>Competitors</span>
+            <CompetitorTierTabs
+              panels={(["TOP", "MIDDLE", "BOTTOM"] as const).map((tier) => {
+                const tierCompetitors = groupCompetitorsByTier(
+                  brand.competitors,
+                )[tier];
+                return {
+                  tier,
+                  count: tierCompetitors.length,
+                  content: (
+                    <CompetitorTable
+                      competitors={tierCompetitors}
+                      linkBase={(id) =>
+                        `/projects/${brand.id}/competitors/${id}`
+                      }
+                    />
+                  ),
+                };
+              })}
+            />
+            <FindMoreCompetitorsButton brandId={brand.id} />
           </div>
         </section>
       ) : null}
@@ -255,7 +256,8 @@ export function BrandForm({ brand }: { brand?: BrandDto }) {
               <p>
                 We sample service, solution, and blog/resource pages; map the
                 niche, audiences, and buyer problems; then OpenAI web search
-                verifies 2–4 direct competitors and builds AEO/GEO context.
+                verifies your closest direct competitors and keeps researching
+                Top, Middle, and Bottom tier alternatives in the background.
               </p>
             </div>
           </div>

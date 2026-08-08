@@ -15,12 +15,16 @@ import {
 import { readPublicWebsiteProfile } from "@/lib/discovery/site-profile";
 import { scopedDb } from "@/lib/db/scoped";
 import { inngest } from "@/lib/inngest/client";
-import { brandDiscoveryRequested } from "@/lib/inngest/events";
+import {
+  brandDiscoveryRequested,
+  competitorExpansionRequested,
+} from "@/lib/inngest/events";
 import { resolveDefault } from "@/lib/llm/registry";
 import type { LlmSource, LlmUsage } from "@/lib/llm/types";
 import { childLogger } from "@/lib/observability/logger";
 import {
   completeOperation,
+  createOperation,
   failOperation,
   setOperationBrand,
   startOperation,
@@ -190,6 +194,27 @@ export const brandDiscovery = inngest.createFunction(
           pagesAnalyzed: snapshot.pages.length,
         },
       });
+    });
+
+    // Fires the larger Top/Middle/Bottom competitor set as a separate,
+    // background pipeline rather than folding it into this function — see
+    // src/lib/inngest/functions/competitor-expansion.ts. Wrapped in step.run
+    // for the same memoization guarantee every other step here relies on:
+    // without it, a retry of a later step (there isn't one today, but the
+    // next one added) could re-send this event and start a second run.
+    await step.run("trigger-competitor-expansion", async () => {
+      const operation = await createOperation(ctx, {
+        kind: "COMPETITOR_EXPANSION",
+        brandId: brand.id,
+        progressTotal: 3,
+      });
+      await inngest.send(
+        competitorExpansionRequested.create({
+          workspaceId,
+          brandId: brand.id,
+          operationId: operation.id,
+        }),
+      );
     });
 
     log.info({ brandId: brand.id }, "brand discovery completed");
