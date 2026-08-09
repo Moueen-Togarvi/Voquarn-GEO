@@ -885,6 +885,22 @@ textarea:focus-visible,
 .project-menu-item.is-current {
   background: #f3f2fa;
 }
+.project-menu-item.is-draft {
+  border: 1px dashed var(--border);
+}
+.project-menu-item.is-draft:hover {
+  background: var(--surface-soft);
+}
+.project-menu-item.is-draft strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: visible;
+}
+.project-menu-item.is-draft .count-pill {
+  padding: 2px 7px;
+  font-size: 9px;
+}
 .project-menu-add {
   display: flex;
   align-items: center;

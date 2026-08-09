@@ -43,10 +43,12 @@ const navItems = [
 function ProjectSwitcher({
   current,
   projects,
+  drafts,
   closeNavigation,
 }: {
   current: BrandDto;
   projects: BrandDto[];
+  drafts: BrandDto[];
   closeNavigation?: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -104,6 +106,29 @@ function ProjectSwitcher({
               </span>
             </Link>
           ))}
+          {drafts.length > 0 ? (
+            <>
+              <span className="menu-label">Drafts</span>
+              {drafts.map((draft) => (
+                <Link
+                  className="project-menu-item is-draft"
+                  href={`/onboarding/review/${draft.id}`}
+                  key={draft.id}
+                  onClick={closeNavigation}
+                >
+                  <span className="project-avatar small">
+                    {initials(draft.name)}
+                  </span>
+                  <span>
+                    <strong>
+                      {draft.name} <span className="count-pill">Draft</span>
+                    </strong>
+                    <small>Finish onboarding to activate</small>
+                  </span>
+                </Link>
+              ))}
+            </>
+          ) : null}
           <Link
             className="project-menu-add"
             href="/onboarding"
@@ -120,11 +145,13 @@ function ProjectSwitcher({
 function NavigationContent({
   current,
   projects,
+  drafts,
   close,
   authEnabled,
 }: {
   current: BrandDto;
   projects: BrandDto[];
+  drafts: BrandDto[];
   close?: () => void;
   authEnabled: boolean;
 }) {
@@ -162,6 +189,7 @@ function NavigationContent({
       <ProjectSwitcher
         current={current}
         projects={projects}
+        drafts={drafts}
         closeNavigation={close}
       />
 
@@ -229,10 +257,13 @@ function NavigationContent({
 export function ProjectNavigation({
   current,
   projects,
+  drafts = [],
   authEnabled = false,
 }: {
   current: BrandDto;
   projects: BrandDto[];
+  /** Unfinished onboarding — see src/lib/brands/service.ts's listDraftBrands(). */
+  drafts?: BrandDto[];
   /** See src/lib/auth/flag.ts — off hides Members/sign-out/workspace switching, which have nothing to act on yet. */
   authEnabled?: boolean;
 }) {
@@ -248,6 +279,7 @@ export function ProjectNavigation({
         <NavigationContent
           current={current}
           projects={projects}
+          drafts={drafts}
           authEnabled={authEnabled}
         />
       </aside>
@@ -279,6 +311,7 @@ export function ProjectNavigation({
             <NavigationContent
               current={current}
               projects={projects}
+              drafts={drafts}
               close={() => setMobileOpen(false)}
               authEnabled={authEnabled}
             />

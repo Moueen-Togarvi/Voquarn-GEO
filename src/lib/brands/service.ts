@@ -69,6 +69,19 @@ export async function getBrand(
   return brand ? toBrandDto(brand) : null;
 }
 
+/** Only DRAFT — onboarding started but not finished. Surfaced in the project switcher so an unfinished project is never invisible, unlike getBrand()/listBrands(). */
+export async function listDraftBrands(
+  ctx: WorkspaceContext,
+): Promise<BrandDto[]> {
+  const brands = await scopedDb(ctx).brand.findMany({
+    where: { status: "DRAFT" },
+    include: { competitors: { orderBy: { createdAt: "asc" } } },
+    orderBy: { updatedAt: "desc" },
+  });
+
+  return brands.map(toBrandDto);
+}
+
 /** Unlike getBrand(), returns a project in any status — the onboarding wizard's review and market steps need to load a DRAFT. */
 export async function getBrandForReview(
   ctx: WorkspaceContext,
