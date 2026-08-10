@@ -8,7 +8,7 @@ export type RunOutcome = {
   mentionCount?: number;
   position?: number | null;
   sentiment?: Sentiment;
-  /** Normalize via normalizeCompetitorMentions() before constructing a RunOutcome — this type only accepts the v2 shape. */
+  /** Normalize via normalizeCompetitorMentions() before constructing a RunOutcome — this type accepts the current structured shape. */
   competitorMentions?: Record<string, CompetitorMentionEntry>;
 };
 
@@ -25,6 +25,18 @@ export type BenchmarkAggregateResult = {
 export function average(values: number[]): number | null {
   if (values.length === 0) return null;
   return values.reduce((total, value) => total + value, 0) / values.length;
+}
+
+/** Peec-style 0–100 score: positive=100, neutral=50, negative=0. */
+export function sentimentScore(
+  distribution: Record<Sentiment, number>,
+): number | null {
+  const total = Object.values(distribution).reduce(
+    (sum, count) => sum + count,
+    0,
+  );
+  if (total === 0) return null;
+  return (distribution.POSITIVE * 100 + distribution.NEUTRAL * 50) / total;
 }
 
 /**
@@ -103,6 +115,9 @@ export type CompetitorAggregateResult = {
   visibility: number | null;
   shareOfVoice: number | null;
   avgPosition: number | null;
+  sentiment: Sentiment | null;
+  sentimentDist: Record<Sentiment, number>;
+  sentimentScore: number | null;
 };
 
 /**
@@ -134,6 +149,11 @@ export function computeCompetitorAggregates(
     let mentionCount = 0;
     let mentionedRunCount = 0;
     const positions: number[] = [];
+    const sentimentDist: Record<Sentiment, number> = {
+      POSITIVE: 0,
+      NEUTRAL: 0,
+      NEGATIVE: 0,
+    };
 
     for (const run of scored) {
       const entry = run.competitorMentions?.[competitorId];
@@ -141,7 +161,18 @@ export function computeCompetitorAggregates(
       mentionCount += entry.count;
       mentionedRunCount += 1;
       if (typeof entry.position === "number") positions.push(entry.position);
+      if (entry.sentiment) sentimentDist[entry.sentiment] += 1;
     }
+
+    const measuredSentiments = Object.entries(sentimentDist).filter(
+      ([, count]) => count > 0,
+    ) as Array<[Sentiment, number]>;
+    const sentiment =
+      measuredSentiments.length > 0
+        ? measuredSentiments.reduce((best, current) =>
+            current[1] > best[1] ? current : best,
+          )[0]
+        : null;
 
     results[competitorId] = {
       competitorId,
@@ -150,6 +181,9 @@ export function computeCompetitorAggregates(
       visibility: scored.length > 0 ? mentionedRunCount / scored.length : null,
       shareOfVoice: totalMentions > 0 ? mentionCount / totalMentions : null,
       avgPosition: average(positions),
+      sentiment,
+      sentimentDist,
+      sentimentScore: sentimentScore(sentimentDist),
     };
   }
 

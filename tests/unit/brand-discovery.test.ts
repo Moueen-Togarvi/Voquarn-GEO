@@ -38,7 +38,9 @@ describe("automatic brand discovery", () => {
     expect(messages[0]?.content).toContain("first analyze");
     expect(messages[0]?.content).toContain("2 to 4 current, direct");
     expect(messages[0]?.content).toContain("Never include the target company");
-    expect(messages[1]?.content).toContain("Company name: Voquarn");
+    expect(messages[1]?.content).toContain(
+      "Temporary domain-derived label: Voquarn",
+    );
     expect(messages[1]?.content).toContain("Voquarn GEO");
   });
 

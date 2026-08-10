@@ -1,91 +1,86 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useState } from "react";
 import {
   saveReviewAction,
   type ReviewFormState,
 } from "@/app/onboarding/review/[brandId]/actions";
-import { CompetitorTable } from "@/components/competitor-table";
-import { CompetitorTierTabs } from "@/components/competitor-tier-tabs";
 import {
   OperationProgress,
   useOperationPolling,
 } from "@/components/operation-progress";
 import { TagList } from "@/components/tag-list";
+import type { ApiAccepted, ApiFailure } from "@/lib/api/types";
 import type { BrandDto } from "@/lib/brands/types";
-import { groupCompetitorsByTier } from "@/lib/competitors/tiers";
+import type { PromptDto } from "@/lib/prompts/types";
 
 const initialState: ReviewFormState = {};
 
 export function CompetitorReview({
   brand,
+  prompts,
   sourceCount,
   initialExpansionOperationId,
+  initialPromptOperationId,
+  initialPromptError,
 }: {
   brand: BrandDto;
+  prompts: PromptDto[];
   sourceCount: number | null;
   initialExpansionOperationId: string | null;
+  initialPromptOperationId: string | null;
+  initialPromptError: string | null;
 }) {
+  const directCompetitors = brand.competitors
+    .filter((competitor) => competitor.tier === "TOP" || !competitor.tier)
+    .slice(0, 30);
   const router = useRouter();
   const [state, formAction, pending] = useActionState(
     saveReviewAction,
     initialState,
   );
-  const [acceptedIds, setAcceptedIds] = useState<Set<string>>(
-    () =>
-      new Set(
-        brand.competitors
-          .filter((competitor) => competitor.status !== "IGNORED")
-          .map((competitor) => competitor.id),
-      ),
-  );
-
-  // Competitor expansion backfills more rows into brand.competitors after
-  // this component has already mounted (via router.refresh() below), so
-  // acceptedIds' one-time initializer above never sees them. Newly-arrived
-  // rows default to accepted, same as the ones present on first render.
-  const knownIdsRef = useRef(new Set(brand.competitors.map((c) => c.id)));
-  useEffect(() => {
-    const arrivals = brand.competitors.filter(
-      (competitor) => !knownIdsRef.current.has(competitor.id),
-    );
-    if (arrivals.length > 0) {
-      setAcceptedIds((current) => {
-        const next = new Set(current);
-        for (const competitor of arrivals) {
-          if (competitor.status !== "IGNORED") next.add(competitor.id);
-        }
-        return next;
-      });
-      knownIdsRef.current = new Set(brand.competitors.map((c) => c.id));
-    }
-  }, [brand.competitors]);
-
   const [expansionOperationId, setExpansionOperationId] = useState(
     initialExpansionOperationId,
   );
-  const { operation: expansionOperation } = useOperationPolling(
-    expansionOperationId,
-    () => {
-      setExpansionOperationId(null);
-      router.refresh();
-    },
+  useOperationPolling(expansionOperationId, () => {
+    setExpansionOperationId(null);
+    router.refresh();
+  });
+  const [promptOperationId, setPromptOperationId] = useState(
+    initialPromptOperationId,
   );
-
-  function toggle(id: string) {
-    setAcceptedIds((current) => {
-      const next = new Set(current);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
+  const [promptError, setPromptError] = useState<string | null>(
+    initialPromptError,
+  );
+  const { operation: promptOperation, pollError: promptPollError } =
+    useOperationPolling(promptOperationId, (settled) => {
+      setPromptOperationId(null);
+      if (settled.status === "FAILED" || settled.status === "CANCELLED") {
+        setPromptError(
+          settled.errorMessage ?? "Prompt generation did not complete.",
+        );
+        return;
       }
-      return next;
+      router.refresh();
     });
-  }
 
-  const competitorsByTier = groupCompetitorsByTier(brand.competitors);
+  async function retryPromptGeneration() {
+    setPromptError(null);
+    try {
+      const response = await fetch(`/api/brands/${brand.id}/prompts/generate`, {
+        method: "POST",
+      });
+      const payload = (await response.json()) as ApiAccepted | ApiFailure;
+      if (response.status === 202 && "operationId" in payload) {
+        setPromptOperationId(payload.operationId);
+      } else if ("error" in payload) {
+        setPromptError(payload.error.message);
+      }
+    } catch {
+      setPromptError("We could not reach the server. Try again.");
+    }
+  }
 
   return (
     <form action={formAction} className="brand-form" noValidate>
@@ -98,8 +93,13 @@ export function CompetitorReview({
           value={competitor.id}
         />
       ))}
-      {[...acceptedIds].map((id) => (
-        <input key={id} type="hidden" name="acceptedCompetitorIds" value={id} />
+      {directCompetitors.map((competitor) => (
+        <input
+          key={competitor.id}
+          type="hidden"
+          name="acceptedCompetitorIds"
+          value={competitor.id}
+        />
       ))}
 
       {state.error ? (
@@ -167,41 +167,92 @@ export function CompetitorReview({
         <div className="form-section-heading">
           <span className="step-number">2</span>
           <div>
-            <h2>Competitors</h2>
+            <h2>Prompts to track</h2>
             <p>
-              Toggle a competitor&apos;s tracking status. Top, Middle, and
-              Bottom tiers reflect how closely each one competes with you.
+              Real questions buyers ask AI while discovering, comparing, and
+              selecting products in your market.
             </p>
           </div>
         </div>
-        {expansionOperationId ? (
-          <OperationProgress
-            operation={expansionOperation}
-            label="Finding more competitors…"
-          />
+
+        {promptError || promptPollError ? (
+          <div className="form-alert" role="alert">
+            <span>{promptError ?? promptPollError}</span>
+            <button
+              className="button button-secondary compact-button"
+              type="button"
+              onClick={() => void retryPromptGeneration()}
+            >
+              Generate again
+            </button>
+          </div>
         ) : null}
-        <CompetitorTierTabs
-          panels={(["TOP", "MIDDLE", "BOTTOM"] as const).map((tier) => ({
-            tier,
-            count: competitorsByTier[tier].length,
-            content: (
-              <CompetitorTable
-                competitors={competitorsByTier[tier]}
-                review={{ acceptedIds, onToggle: toggle, pending }}
-              />
-            ),
-          }))}
-        />
+
+        {promptOperationId ? (
+          <OperationProgress
+            operation={promptOperation}
+            label="Generating your prompt library…"
+          />
+        ) : prompts.length > 0 ? (
+          <>
+            <div className="prompt-review-summary">
+              <span>
+                <strong>{prompts.length}</strong> prompts ready
+              </span>
+              <span>OpenAI Search</span>
+              <span>US · English</span>
+            </div>
+            <ol className="onboarding-prompt-list peec-prompt-list">
+              {prompts.map((prompt, index) => (
+                <li key={prompt.id}>
+                  <span className="prompt-index">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <p>{prompt.text}</p>
+                  <span className="prompt-type-badge">
+                    {prompt.type.replace("_", " ")}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </>
+        ) : (
+          <div className="benchmark-empty-state">
+            <span className="research-spinner" />
+            <div>
+              <strong>Preparing buyer prompts…</strong>
+              <p>Your prompt library will appear here automatically.</p>
+            </div>
+          </div>
+        )}
+
+        {expansionOperationId ? (
+          <span className="sr-only" role="status" aria-live="polite">
+            Preparing benchmark entities…
+          </span>
+        ) : null}
       </section>
 
       <div className="form-actions">
-        <p>You can fine-tune everything again from project settings.</p>
+        <p>
+          Competitors stay hidden until Step 3, where benchmark evidence ranks
+          the top 30.
+        </p>
         <button
           className="button button-primary button-large"
           type="submit"
-          disabled={pending}
+          disabled={
+            pending ||
+            Boolean(expansionOperationId) ||
+            Boolean(promptOperationId) ||
+            prompts.length === 0
+          }
         >
-          {pending ? "Saving…" : "Continue"}
+          {pending
+            ? "Starting benchmark…"
+            : expansionOperationId || promptOperationId
+              ? "Preparing analysis…"
+              : "Continue to AI benchmark"}
         </button>
       </div>
     </form>

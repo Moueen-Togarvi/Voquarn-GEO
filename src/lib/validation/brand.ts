@@ -46,6 +46,23 @@ export function domainFromUrl(value: string): string {
   return hostname ? registrableDomain(hostname) : "";
 }
 
+/** A temporary label used until website research returns the official name. */
+export function brandNameFromWebsiteUrl(value: string): string {
+  const domain = domainFromUrl(value);
+  const label = domain.split(".")[0] ?? "Website";
+  const words = label
+    .replace(/[-_]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  return (
+    words
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ") || "Website"
+  );
+}
+
 export const websiteUrlSchema = z
   .preprocess(
     (value) => (typeof value === "string" ? withProtocol(value) : value),
@@ -61,14 +78,20 @@ export const websiteUrlSchema = z
   }, "Website URL must use http or https")
   .transform(normalizeUrl);
 
-export const brandDiscoveryInputSchema = z.object({
-  name: z
-    .string()
-    .trim()
-    .min(2, "Brand name is required")
-    .max(80, "Keep the brand name under 80 characters"),
-  websiteUrl: websiteUrlSchema,
-});
+export const brandDiscoveryInputSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(2, "Brand name is required")
+      .max(80, "Keep the brand name under 80 characters")
+      .optional(),
+    websiteUrl: websiteUrlSchema,
+  })
+  .transform((value) => ({
+    websiteUrl: value.websiteUrl,
+    name: value.name ?? brandNameFromWebsiteUrl(value.websiteUrl),
+  }));
 
 export const competitorInputSchema = z.object({
   name: z

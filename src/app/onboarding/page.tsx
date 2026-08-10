@@ -8,7 +8,7 @@ export default function OnboardingPage() {
     <OnboardingShell
       eyebrow="New tracking project"
       title="See how AI understands your brand."
-      lead="Enter only your company name and website. Voquarn researches your product, category, and closest competitors automatically."
+      lead="Enter only your website domain. Voquarn identifies your brand, researches the market, builds buyer prompts, and finds your closest competitors automatically."
     >
       <BrandForm />
     </OnboardingShell>

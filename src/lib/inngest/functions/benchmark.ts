@@ -10,13 +10,14 @@ import {
   markRunCompleted,
   markRunFailed,
   markRunRunning,
+  refreshBatchAggregate,
   shouldUseBenchmarkFixture,
   startBatch,
   type BenchmarkGeneration,
 } from "@/lib/benchmark/service";
 import { analyzeAnswer } from "@/lib/benchmark/analysis";
 import {
-  buildSentimentJudgeRequest,
+  buildEntitySentimentJudgeRequest,
   DEFAULT_SENTIMENT,
 } from "@/lib/benchmark/sentiment";
 import { scopedDb } from "@/lib/db/scoped";
@@ -40,6 +41,11 @@ import {
 import { withProviderCall } from "@/lib/providers/instrument";
 import { recordUsage, USAGE_METERS } from "@/lib/usage/ledger";
 
+type EntitySentimentOutcome = {
+  brand: Sentiment;
+  competitors: Record<string, Sentiment>;
+};
+
 /**
  * Executes exactly one PromptRun: generate an answer, extract mentions with
  * the pure analyzer, optionally judge sentiment, persist, advance progress.
@@ -53,7 +59,7 @@ export const benchmarkRunExecute = inngest.createFunction(
     id: "benchmark-run-execute",
     triggers: [{ event: benchmarkRunRequested }],
     concurrency: [
-      { key: "event.data.workspaceId", limit: 4 },
+      { key: "event.data.workspaceId", limit: 8 },
       { key: "event.data.provider", limit: 20, scope: "account" },
     ],
     retries: 2,
@@ -123,7 +129,14 @@ export const benchmarkRunExecute = inngest.createFunction(
       const brand = await scopedDb(ctx).brand.findFirstOrThrow({
         where: { id: batch.brandId },
         include: {
-          competitors: { where: { status: { in: ["ACCEPTED", "PINNED"] } } },
+          competitors: {
+            where: {
+              status: { in: ["ACCEPTED", "PINNED"] },
+              OR: [{ tier: "TOP" }, { tier: null }],
+            },
+            orderBy: { createdAt: "asc" },
+            take: 30,
+          },
         },
       });
 
@@ -137,6 +150,7 @@ export const benchmarkRunExecute = inngest.createFunction(
         ],
         competitors: brand.competitors.map((competitor) => ({
           id: competitor.id,
+          name: competitor.name,
           aliases: [competitor.name],
         })),
       };
@@ -191,15 +205,28 @@ export const benchmarkRunExecute = inngest.createFunction(
       context.competitors,
     );
 
-    const sentiment = await step.run(
+    const sentiments = await step.run(
       "judge-sentiment",
-      async (): Promise<Sentiment> => {
-        if (!analysis.brandMentioned || analysis.refused) {
-          return DEFAULT_SENTIMENT;
+      async (): Promise<EntitySentimentOutcome> => {
+        const defaults: EntitySentimentOutcome = {
+          brand: DEFAULT_SENTIMENT,
+          competitors: {},
+        };
+        if (analysis.refused) return defaults;
+
+        const entities: Array<{ id: string; name: string }> = [];
+        if (analysis.brandMentioned) {
+          entities.push({ id: "__brand__", name: context.brandName });
         }
-        if (shouldUseBenchmarkFixture() || !process.env.OPENAI_API_KEY) {
-          return DEFAULT_SENTIMENT;
+        for (const competitor of context.competitors) {
+          if ((analysis.competitorMentions[competitor.id]?.count ?? 0) > 0) {
+            entities.push({ id: competitor.id, name: competitor.name });
+            defaults.competitors[competitor.id] = DEFAULT_SENTIMENT;
+          }
         }
+        if (entities.length === 0) return defaults;
+        if (shouldUseBenchmarkFixture() || !process.env.OPENAI_API_KEY)
+          return defaults;
 
         try {
           const provider = getProvider(providerName);
@@ -213,17 +240,30 @@ export const benchmarkRunExecute = inngest.createFunction(
             },
             () =>
               provider.generateJson(
-                buildSentimentJudgeRequest(generation.text, context.brandName),
+                buildEntitySentimentJudgeRequest(generation.text, entities),
               ),
           );
-          return result.content.sentiment;
+          const allowedIds = new Set(entities.map((entity) => entity.id));
+          for (const item of result.content.sentiments) {
+            if (!allowedIds.has(item.id)) continue;
+            if (item.id === "__brand__") defaults.brand = item.sentiment;
+            else defaults.competitors[item.id] = item.sentiment;
+          }
+          return defaults;
         } catch {
           // Sentiment is supplementary, not core to visibility measurement —
           // a judge-call failure must never fail an otherwise-successful run.
-          return DEFAULT_SENTIMENT;
+          return defaults;
         }
       },
     );
+
+    for (const [competitorId, sentiment] of Object.entries(
+      sentiments.competitors,
+    )) {
+      const entry = analysis.competitorMentions[competitorId];
+      if (entry) entry.sentiment = sentiment;
+    }
 
     await step.run("persist-analysis", async () => {
       await markRunCompleted(ctx, run.id, {
@@ -234,7 +274,7 @@ export const benchmarkRunExecute = inngest.createFunction(
         totalTokens: generation.usage.totalTokens,
         providerCallId: generation.providerCallId,
         analysis,
-        sentiment,
+        sentiment: sentiments.brand,
       });
 
       await recordUsage(ctx, {
@@ -265,7 +305,7 @@ export const benchmarkRunExecute = inngest.createFunction(
   },
 );
 
-const FANOUT_CHUNK_SIZE = 8;
+const FANOUT_CHUNK_SIZE = 4;
 
 /**
  * Orchestrates a batch: fans out over every PENDING PromptRun in bounded
@@ -332,7 +372,8 @@ export const benchmarkBatchStart = inngest.createFunction(
       }),
     );
 
-    for (const group of chunk(pendingRuns, FANOUT_CHUNK_SIZE)) {
+    const groups = chunk(pendingRuns, FANOUT_CHUNK_SIZE);
+    for (const [groupIndex, group] of groups.entries()) {
       await Promise.allSettled(
         group.map((run) =>
           step.invoke(`run-${run.promptId}-${run.repetitionIndex}`, {
@@ -347,6 +388,25 @@ export const benchmarkBatchStart = inngest.createFunction(
             },
           }),
         ),
+      );
+
+      // Publish a trustworthy partial aggregate after every parallel wave.
+      // The onboarding page can render useful metrics after the first eight
+      // answers instead of holding everything behind the slowest of all runs.
+      const snapshot = await step.run(
+        `publish-snapshot-${groupIndex + 1}`,
+        () => refreshBatchAggregate(ctx, batchId),
+      );
+      await step.run(`announce-snapshot-${groupIndex + 1}`, () =>
+        advanceOperation(ctx, batch.operationId, {
+          progressCurrent: snapshot.sampleSize + snapshot.failedCount,
+          progressTotal: batch.totalRuns,
+          metadata: {
+            batchId,
+            brandId: batch.brandId,
+            partialSampleSize: snapshot.sampleSize,
+          },
+        }),
       );
     }
 

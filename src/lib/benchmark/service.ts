@@ -275,7 +275,7 @@ export async function getLatestAggregate(
   const batch = await scopedDb(ctx).analysisBatch.findFirst({
     where: { brandId, aggregate: { isNot: null } },
     include: { aggregate: true },
-    orderBy: { completedAt: "desc" },
+    orderBy: { createdAt: "desc" },
   });
   if (!batch?.aggregate) return null;
 
@@ -283,6 +283,44 @@ export async function getLatestAggregate(
     batch: toBatchDto(batch),
     aggregate: toAggregateDto(batch.aggregate),
   };
+}
+
+/**
+ * Stores an in-progress aggregate from every answer that has completed so
+ * far. This never marks the batch terminal; finalizeBatch remains the only
+ * function that decides COMPLETED/PARTIAL_FAILURE/FAILED.
+ */
+export async function refreshBatchAggregate(
+  ctx: WorkspaceContext,
+  batchId: string,
+): Promise<BenchmarkAggregateDto> {
+  const batch = await scopedDb(ctx).analysisBatch.findFirst({
+    where: { id: batchId },
+    include: { runs: { include: { analysis: true } } },
+  });
+  if (!batch) {
+    throw new AppError(404, "BATCH_NOT_FOUND", "Batch not found.");
+  }
+
+  const outcomes: RunOutcome[] = batch.runs.map((run) => ({
+    status: run.status,
+    refused: run.analysis?.refused,
+    brandMentioned: run.analysis?.brandMentioned,
+    mentionCount: run.analysis?.mentionCount,
+    position: run.analysis?.position,
+    sentiment: run.analysis?.sentiment,
+    competitorMentions: run.analysis
+      ? normalizeCompetitorMentions(run.analysis.competitorMentions)
+      : undefined,
+  }));
+  const result = computeAggregate(outcomes);
+  const aggregate = await scopedDb(ctx).benchmarkAggregate.upsert({
+    where: { batchId },
+    update: { ...result, computedAt: new Date() },
+    create: { workspaceId: ctx.workspaceId, batchId, ...result },
+  });
+
+  return toAggregateDto(aggregate);
 }
 
 export async function findRunByKey(
@@ -476,9 +514,9 @@ export async function getCompetitorMentionStats(
         include: { runs: { include: { analysis: true } } },
       })
     : await scopedDb(ctx).analysisBatch.findFirst({
-        where: { brandId, completedAt: { not: null } },
+        where: { brandId, completedRuns: { gt: 0 } },
         include: { runs: { include: { analysis: true } } },
-        orderBy: { completedAt: "desc" },
+        orderBy: { createdAt: "desc" },
       });
 
   if (!batch) return { batchId: null, stats: {} };

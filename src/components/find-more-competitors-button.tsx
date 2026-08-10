@@ -68,7 +68,7 @@ export function FindMoreCompetitorsButton({ brandId }: { brandId: string }) {
       {running ? (
         <OperationProgress
           operation={operation}
-          label="Researching Top, Middle, and Bottom tier competitors…"
+          label="Researching the strongest direct competitors…"
         />
       ) : null}
       {error ? (

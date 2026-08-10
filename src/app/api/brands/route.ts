@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 
 import type { ApiAccepted, ApiSuccess } from "@/lib/api/types";
+import { getClientIp } from "@/lib/api/client-ip";
 import { AppError } from "@/lib/api/errors";
 import { route } from "@/lib/api/handler";
+import { checkRateLimit } from "@/lib/api/rate-limit";
 import { listBrands } from "@/lib/brands/service";
 import type { BrandDto } from "@/lib/brands/types";
 import {
@@ -21,6 +23,19 @@ export const GET = route(async ({ ctx }) => {
 });
 
 export const POST = route(async ({ ctx, request }) => {
+  const rateLimit = await checkRateLimit({
+    key: `brand-discovery:${getClientIp(request)}`,
+    limit: 5,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!rateLimit.allowed) {
+    throw new AppError(
+      429,
+      "RATE_LIMITED",
+      "Too many projects created recently. Try again in a bit.",
+    );
+  }
+
   const input = brandDiscoveryInputSchema.parse(await request.json());
 
   // Fail fast on an obviously bad URL rather than creating an Operation that

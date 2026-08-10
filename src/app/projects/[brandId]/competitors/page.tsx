@@ -1,13 +1,11 @@
 import { notFound } from "next/navigation";
 import { getCompetitorMentionStats } from "@/lib/benchmark/service";
 import { CompetitorTable } from "@/components/competitor-table";
-import { CompetitorTierTabs } from "@/components/competitor-tier-tabs";
 import { FindMoreCompetitorsButton } from "@/components/find-more-competitors-button";
 import { PageHeader } from "@/components/page-header";
 import { RunHuntButton } from "@/components/run-hunt-button";
 import { requireWorkspaceContext } from "@/lib/auth/context";
 import { getBrand } from "@/lib/brands/service";
-import { groupCompetitorsByTier } from "@/lib/competitors/tiers";
 import { listCompetitorsWithLatestScore } from "@/lib/hunt/service";
 
 export const metadata = { title: "Competitors" };
@@ -26,7 +24,10 @@ export default async function CompetitorsPage({
     listCompetitorsWithLatestScore(ctx, brand.id),
     getCompetitorMentionStats(ctx, brand.id),
   ]);
-  const competitorsByTier = groupCompetitorsByTier(competitors);
+  const topCompetitors = competitors
+    .filter((competitor) => competitor.tier === "TOP" || !competitor.tier)
+    .sort((a, b) => (b.latestScore?.value ?? -1) - (a.latestScore?.value ?? -1))
+    .slice(0, 30);
 
   return (
     <div className="page-container">
@@ -42,25 +43,17 @@ export default async function CompetitorsPage({
         }
       />
 
-      {competitors.length === 0 ? (
+      {topCompetitors.length === 0 ? (
         <p className="muted-text">
           No tracked competitors yet. Accept competitors from your onboarding
           review, then run a hunt above.
         </p>
       ) : (
         <div className="content-card">
-          <CompetitorTierTabs
-            panels={(["TOP", "MIDDLE", "BOTTOM"] as const).map((tier) => ({
-              tier,
-              count: competitorsByTier[tier].length,
-              content: (
-                <CompetitorTable
-                  competitors={competitorsByTier[tier]}
-                  mentionStats={mentionStats.stats}
-                  linkBase={(id) => `/projects/${brand.id}/competitors/${id}`}
-                />
-              ),
-            }))}
+          <CompetitorTable
+            competitors={topCompetitors}
+            mentionStats={mentionStats.stats}
+            linkBase={(id) => `/projects/${brand.id}/competitors/${id}`}
           />
         </div>
       )}

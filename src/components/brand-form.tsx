@@ -4,7 +4,6 @@ import { Check, Search, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { CompetitorTable } from "@/components/competitor-table";
-import { CompetitorTierTabs } from "@/components/competitor-tier-tabs";
 import { FindMoreCompetitorsButton } from "@/components/find-more-competitors-button";
 import {
   OperationProgress,
@@ -13,11 +12,10 @@ import {
 import { TagList } from "@/components/tag-list";
 import type { ApiAccepted, ApiFailure } from "@/lib/api/types";
 import type { BrandDto } from "@/lib/brands/types";
-import { groupCompetitorsByTier } from "@/lib/competitors/tiers";
 import type { OperationDto } from "@/lib/operations/types";
 import { brandDiscoveryInputSchema } from "@/lib/validation/brand";
 
-type FormValue = { name: string; websiteUrl: string };
+type FormValue = { websiteUrl: string };
 
 function brandIdFromOperation(operation: OperationDto): string | null {
   const brandId = operation.metadata?.brandId;
@@ -27,7 +25,6 @@ function brandIdFromOperation(operation: OperationDto): string | null {
 export function BrandForm({ brand }: { brand?: BrandDto }) {
   const router = useRouter();
   const [value, setValue] = useState<FormValue>({
-    name: brand?.name ?? "",
     websiteUrl: brand?.websiteUrl ?? "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -168,24 +165,13 @@ export function BrandForm({ brand }: { brand?: BrandDto }) {
           />
           <div className="discovered-competitors">
             <span>Competitors</span>
-            <CompetitorTierTabs
-              panels={(["TOP", "MIDDLE", "BOTTOM"] as const).map((tier) => {
-                const tierCompetitors = groupCompetitorsByTier(
-                  brand.competitors,
-                )[tier];
-                return {
-                  tier,
-                  count: tierCompetitors.length,
-                  content: (
-                    <CompetitorTable
-                      competitors={tierCompetitors}
-                      linkBase={(id) =>
-                        `/projects/${brand.id}/competitors/${id}`
-                      }
-                    />
-                  ),
-                };
-              })}
+            <CompetitorTable
+              competitors={brand.competitors
+                .filter(
+                  (competitor) => competitor.tier === "TOP" || !competitor.tier,
+                )
+                .slice(0, 30)}
+              linkBase={(id) => `/projects/${brand.id}/competitors/${id}`}
             />
             <FindMoreCompetitorsButton brandId={brand.id} />
           </div>
@@ -209,42 +195,31 @@ export function BrandForm({ brand }: { brand?: BrandDto }) {
                 {isEditing ? "Re-analyze your company" : "Add your company"}
               </h2>
               <p>
-                Only the company name and website are needed. We analyze the
-                site before researching its niche and closest competitors.
+                Enter one domain. We identify the company, analyze its site, and
+                research its closest competitors automatically.
               </p>
             </div>
           </div>
 
-          <div className="form-grid two-columns">
-            <label className="field">
-              <span>Company name</span>
-              <input
-                value={value.name}
-                onChange={(event) => updateField("name", event.target.value)}
-                placeholder="Voquarn"
-                aria-invalid={Boolean(errors.name)}
-                disabled={status === "researching"}
-              />
-              {errors.name ? (
-                <small className="field-error">{errors.name}</small>
-              ) : null}
-            </label>
-            <label className="field">
-              <span>Company website</span>
+          <div className="form-grid">
+            <label className="field field-span domain-entry-field">
+              <span>Website domain</span>
               <input
                 type="url"
                 value={value.websiteUrl}
                 onChange={(event) =>
                   updateField("websiteUrl", event.target.value)
                 }
-                placeholder="https://voquarn.com"
+                placeholder="yourcompany.com"
                 aria-invalid={Boolean(errors.websiteUrl)}
                 disabled={status === "researching"}
               />
               {errors.websiteUrl ? (
                 <small className="field-error">{errors.websiteUrl}</small>
               ) : (
-                <small>Use the official product homepage.</small>
+                <small>
+                  A bare domain is enough — for example, voquarn.com.
+                </small>
               )}
             </label>
           </div>
@@ -254,10 +229,9 @@ export function BrandForm({ brand }: { brand?: BrandDto }) {
             <div>
               <strong>Everything else is automatic</strong>
               <p>
-                We sample service, solution, and blog/resource pages; map the
-                niche, audiences, and buyer problems; then OpenAI web search
-                verifies your closest direct competitors and keeps researching
-                Top, Middle, and Bottom tier alternatives in the background.
+                We sample service, solution, and resource pages; identify the
+                official brand and buyer niche; then OpenAI web research builds
+                a focused list of up to 30 direct competitors.
               </p>
             </div>
           </div>
@@ -295,7 +269,7 @@ export function BrandForm({ brand }: { brand?: BrandDto }) {
             ) : isEditing ? (
               "Re-analyze project"
             ) : (
-              "Research & create project"
+              "Analyze domain"
             )}
           </button>
         </div>

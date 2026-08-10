@@ -4,6 +4,8 @@ import {
   Circle,
   FileQuestion,
   Play,
+  ShieldAlert,
+  Sparkles,
   Users,
 } from "lucide-react";
 import Link from "next/link";
@@ -11,13 +13,18 @@ import { notFound } from "next/navigation";
 import {
   getCompetitorMentionStats,
   getLatestAggregate,
+  listBatchSummaries,
 } from "@/lib/benchmark/service";
-import { MetricCard } from "@/components/metric-card";
+import { sentimentScore } from "@/lib/benchmark/aggregate";
+import { MetricCard, type MetricTrend } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
 import { TagList } from "@/components/tag-list";
 import { requireWorkspaceContext } from "@/lib/auth/context";
 import { getBrand } from "@/lib/brands/service";
+import { getAiCrawlerAccess } from "@/lib/crawl/service";
 import { resolveDefault } from "@/lib/llm/registry";
+import { detectCitationGaps } from "@/lib/opportunity/detectors";
+import { getBenchmarkCitationShares } from "@/lib/opportunity/service";
 import { listActivePrompts } from "@/lib/prompts/service";
 
 export const metadata = { title: "Overview" };
@@ -26,14 +33,35 @@ function formatPercent(value: number | null | undefined): string {
   return value == null ? "—" : `${Math.round(value * 100)}%`;
 }
 
-function dominantSentiment(dist: Record<string, number> | undefined): string {
-  if (!dist) return "—";
-  const entries = Object.entries(dist).filter(([, count]) => count > 0);
-  if (entries.length === 0) return "—";
-  const [label] = entries.reduce((best, entry) =>
-    entry[1] > best[1] ? entry : best,
-  );
-  return label.charAt(0) + label.slice(1).toLowerCase();
+function toSentimentScore(
+  dist: Record<string, number> | null | undefined,
+): number | null {
+  if (!dist) return null;
+  return sentimentScore({
+    POSITIVE: dist.POSITIVE ?? 0,
+    NEUTRAL: dist.NEUTRAL ?? 0,
+    NEGATIVE: dist.NEGATIVE ?? 0,
+  });
+}
+
+/** Position is inverted: a lower average mention order is better, unlike every other metric here where higher is better. */
+function trendFor(
+  current: number | null,
+  previous: number | null,
+  options: { invert?: boolean; suffix?: string; digits?: number } = {},
+): MetricTrend | undefined {
+  if (current == null || previous == null) return undefined;
+  const delta = current - previous;
+  const digits = options.digits ?? 0;
+  const rounded = Math.abs(delta) < 0.5 * 10 ** -digits ? 0 : delta;
+  if (rounded === 0) return { direction: "flat", label: "No change" };
+  const improved = options.invert ? rounded < 0 : rounded > 0;
+  const magnitude = Math.abs(rounded).toFixed(digits);
+  const suffix = options.suffix ?? "";
+  return {
+    direction: improved ? "up" : "down",
+    label: `${rounded > 0 ? "+" : "-"}${magnitude}${suffix} vs last run`,
+  };
 }
 
 export default async function OverviewPage({
@@ -46,10 +74,20 @@ export default async function OverviewPage({
   const brand = await getBrand(ctx, brandId);
   if (!brand) notFound();
 
-  const [activePrompts, latest, mentionStats] = await Promise.all([
+  const [
+    activePrompts,
+    latest,
+    mentionStats,
+    batchSummaries,
+    crawlerAccess,
+    citationShares,
+  ] = await Promise.all([
     listActivePrompts(ctx, brand.id),
     getLatestAggregate(ctx, brand.id),
     getCompetitorMentionStats(ctx, brand.id),
+    listBatchSummaries(ctx, brand.id),
+    getAiCrawlerAccess(brand.domain),
+    getBenchmarkCitationShares(ctx, brand.id),
   ]);
   const model = resolveDefault("benchmark");
 
@@ -72,6 +110,17 @@ export default async function OverviewPage({
       }
     : null;
 
+  const sentimentValue = toSentimentScore(latest?.aggregate.sentimentDist);
+  const previousAggregate = batchSummaries.filter((batch) => batch.aggregate)[1]
+    ?.aggregate;
+  const previousSentiment = toSentimentScore(previousAggregate?.sentimentDist);
+
+  const blockedBots = crawlerAccess.filter((entry) => !entry.allowed);
+  const citationGaps = detectCitationGaps(citationShares);
+  const topGap = [...citationGaps].sort(
+    (a, b) => (b.components.gapSeverity ?? 0) - (a.components.gapSeverity ?? 0),
+  )[0];
+
   return (
     <div className="page-container">
       <PageHeader
@@ -93,16 +142,27 @@ export default async function OverviewPage({
           label="Visibility"
           value={formatPercent(latest?.aggregate.visibility)}
           caption="Runs mentioning your brand"
+          trend={trendFor(
+            latest?.aggregate.visibility ?? null,
+            previousAggregate?.visibility ?? null,
+            { suffix: "pts", digits: 0 },
+          )}
         />
         <MetricCard
           label="Share of voice"
           value={formatPercent(latest?.aggregate.shareOfVoice)}
           caption="Mentions vs competitors"
+          trend={trendFor(
+            latest?.aggregate.shareOfVoice ?? null,
+            previousAggregate?.shareOfVoice ?? null,
+            { suffix: "pts", digits: 0 },
+          )}
         />
         <MetricCard
           label="Sentiment"
-          value={dominantSentiment(latest?.aggregate.sentimentDist)}
-          caption="How AI describes you"
+          value={sentimentValue == null ? "—" : `${Math.round(sentimentValue)}`}
+          caption="How AI describes you, out of 100"
+          trend={trendFor(sentimentValue, previousSentiment, { digits: 0 })}
         />
         <MetricCard
           label="Position"
@@ -112,7 +172,70 @@ export default async function OverviewPage({
               : "—"
           }
           caption="Average mention order"
+          trend={trendFor(
+            latest?.aggregate.avgPosition ?? null,
+            previousAggregate?.avgPosition ?? null,
+            { invert: true, digits: 1 },
+          )}
         />
+      </section>
+
+      {citationGaps.length > 0 && topGap ? (
+        <Link
+          className="gap-tease"
+          href={`/projects/${brand.id}/opportunities`}
+        >
+          <Sparkles size={18} />
+          <div>
+            <strong>
+              {citationGaps.length} gap opportunit
+              {citationGaps.length === 1 ? "y" : "ies"} found
+            </strong>
+            <p>
+              {topGap.title} — see where competitors are cited more than you.
+            </p>
+          </div>
+          <ArrowUpRight size={17} />
+        </Link>
+      ) : null}
+
+      <section className="content-card">
+        <div className="card-heading">
+          <div>
+            <p className="page-eyebrow">GEO health</p>
+            <h2>AI crawler access</h2>
+          </div>
+        </div>
+        {crawlerAccess.length === 0 ? (
+          <p className="muted-text">
+            Re-analyze this project to check whether AI crawlers can read your
+            site.
+          </p>
+        ) : blockedBots.length === 0 ? (
+          <p className="muted-text">
+            All {crawlerAccess.length} tracked AI crawlers (GPTBot, ClaudeBot,
+            PerplexityBot, and others) can access your site.
+          </p>
+        ) : (
+          <>
+            <p className="muted-text">
+              {blockedBots.length} of {crawlerAccess.length} AI crawlers are
+              blocked from reading your site — they can&apos;t cite what they
+              can&apos;t see.
+            </p>
+            <div className="crawler-audit-list">
+              {blockedBots.map((entry) => (
+                <div className="crawler-audit-item" key={entry.botName}>
+                  <ShieldAlert size={15} />
+                  <div>
+                    <strong>{entry.botName}</strong>
+                    <p>{entry.evidence}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </section>
 
       <section className="content-card">
@@ -201,8 +324,7 @@ export default async function OverviewPage({
             <div>
               <dt>Competitors</dt>
               <dd>
-                <Users size={15} /> {brand.competitors.length} tracked (
-                {topTierCount} top-tier)
+                <Users size={15} /> {topTierCount} of 30 direct competitors
               </dd>
             </div>
             {mostMentioned?.competitor ? (

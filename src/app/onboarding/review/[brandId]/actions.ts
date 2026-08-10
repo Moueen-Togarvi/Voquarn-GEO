@@ -3,8 +3,13 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireWorkspaceContext } from "@/lib/auth/context";
-import { updateDraftProfile } from "@/lib/brands/service";
+import {
+  activateBrand,
+  setBrandMarket,
+  updateDraftProfile,
+} from "@/lib/brands/service";
 import { bulkUpdateCompetitorStatus } from "@/lib/competitors/service";
+import { findOrCreateMarket } from "@/lib/markets/service";
 
 const reviewSchema = z.object({
   brandId: z.string().min(1),
@@ -54,7 +59,24 @@ export async function saveReviewAction(
       ignoredIds,
     });
 
-    redirectTo = `/onboarding/market/${parsed.data.brandId}`;
+    // Domain-only onboarding uses a sensible default monitoring market. The
+    // project settings page still allows this to be refined later, while the
+    // user can move straight to real prompt execution now.
+    const market = await findOrCreateMarket(ctx, {
+      country: "US",
+      region: null,
+      city: null,
+      language: "en",
+      device: "DESKTOP",
+      timezone: "UTC",
+    });
+    await setBrandMarket(ctx, parsed.data.brandId, {
+      defaultMarketId: market.id,
+      timezone: market.timezone,
+    });
+    await activateBrand(ctx, parsed.data.brandId);
+
+    redirectTo = `/onboarding/benchmark/${parsed.data.brandId}`;
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : "Something went wrong.",

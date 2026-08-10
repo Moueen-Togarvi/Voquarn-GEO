@@ -114,11 +114,23 @@ export function useOperationPolling(
 export function OperationProgress({
   operation,
   label,
+  unitLabel = "steps completed",
 }: {
   operation: OperationDto | null;
   label: string;
+  unitLabel?: string;
 }) {
   if (!operation) return null;
+
+  const percent =
+    operation.progressTotal > 0
+      ? Math.min(
+          100,
+          Math.round(
+            (operation.progressCurrent / operation.progressTotal) * 100,
+          ),
+        )
+      : 0;
 
   return (
     <div className="research-progress" role="status" aria-live="polite">
@@ -127,9 +139,14 @@ export function OperationProgress({
         <strong>{label}</strong>
         <small>
           {operation.progressTotal > 0
-            ? `Step ${operation.progressCurrent} of ${operation.progressTotal}`
+            ? `${operation.progressCurrent} of ${operation.progressTotal} ${unitLabel}`
             : "This can take around 20–60 seconds."}
         </small>
+        {operation.progressTotal > 0 ? (
+          <span className="research-progress-track" aria-hidden="true">
+            <span style={{ width: `${percent}%` }} />
+          </span>
+        ) : null}
       </div>
     </div>
   );

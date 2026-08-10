@@ -57,9 +57,16 @@ export const promptGeneration = inngest.createFunction(
 
     const context = await step.run("load-context", async () => {
       const brand = await scopedDb(ctx).brand.findFirstOrThrow({
-        where: { id: brandId, status: "ACTIVE" },
+        where: { id: brandId, status: { in: ["DRAFT", "ACTIVE"] } },
         include: {
-          competitors: { where: { status: { in: ["ACCEPTED", "PINNED"] } } },
+          competitors: {
+            where: {
+              status: { in: ["CANDIDATE", "ACCEPTED", "PINNED"] },
+              OR: [{ tier: "TOP" }, { tier: null }],
+            },
+            orderBy: { createdAt: "asc" },
+            take: 30,
+          },
         },
       });
       if (!brand.defaultMarketId) {

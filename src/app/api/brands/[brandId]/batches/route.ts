@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import type { ApiAccepted, ApiSuccess } from "@/lib/api/types";
+import { getClientIp } from "@/lib/api/client-ip";
 import { AppError } from "@/lib/api/errors";
 import { route } from "@/lib/api/handler";
+import { checkRateLimit } from "@/lib/api/rate-limit";
 import { getBrand } from "@/lib/brands/service";
 import { createBatch, listBatches } from "@/lib/benchmark/service";
 import type { AnalysisBatchDto } from "@/lib/benchmark/types";
@@ -31,6 +33,19 @@ export const GET = route<RouteParams>(async ({ ctx, params }) => {
 });
 
 export const POST = route<RouteParams>(async ({ ctx, request, params }) => {
+  const rateLimit = await checkRateLimit({
+    key: `benchmark-batch:${getClientIp(request)}`,
+    limit: 10,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!rateLimit.allowed) {
+    throw new AppError(
+      429,
+      "RATE_LIMITED",
+      "Too many analysis runs recently. Try again in a bit.",
+    );
+  }
+
   const existing = await getBrand(ctx, params.brandId);
   if (!existing) {
     throw new AppError(404, "BRAND_NOT_FOUND", "Project not found.");

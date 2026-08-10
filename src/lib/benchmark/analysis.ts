@@ -1,3 +1,5 @@
+import type { Sentiment } from "@/generated/prisma/enums";
+
 /**
  * Bump whenever analyzeAnswer()'s behavior changes in a way that would shift
  * results for previously-analyzed answers. Stored on both RunAnalysis and
@@ -8,8 +10,9 @@
  * as a plain number). See normalizeCompetitorMentions() below for the
  * shape-detecting adapter that lets both versions coexist in stored data
  * without a backfill migration.
+ * v3: mentioned competitors may also carry answer-specific sentiment.
  */
-export const EXTRACTION_VERSION = "v2";
+export const EXTRACTION_VERSION = "v3";
 
 export type AliasEntity = {
   id: string;
@@ -20,6 +23,7 @@ export type AliasEntity = {
 export type CompetitorMentionEntry = {
   count: number;
   position: number | null;
+  sentiment?: Sentiment | null;
 };
 
 export type AnswerAnalysis = {
@@ -56,8 +60,22 @@ export function normalizeCompetitorMentions(
       "count" in value &&
       typeof (value as { count: unknown }).count === "number"
     ) {
-      const entry = value as { count: number; position?: number | null };
-      result[id] = { count: entry.count, position: entry.position ?? null };
+      const entry = value as {
+        count: number;
+        position?: number | null;
+        sentiment?: unknown;
+      };
+      const sentiment =
+        entry.sentiment === "POSITIVE" ||
+        entry.sentiment === "NEUTRAL" ||
+        entry.sentiment === "NEGATIVE"
+          ? entry.sentiment
+          : undefined;
+      result[id] = {
+        count: entry.count,
+        position: entry.position ?? null,
+        ...(sentiment ? { sentiment } : {}),
+      };
     }
   }
   return result;

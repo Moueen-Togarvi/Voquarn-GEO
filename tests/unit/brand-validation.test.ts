@@ -30,6 +30,15 @@ describe("brand validation", () => {
     });
   });
 
+  it("derives a temporary brand label when onboarding supplies only a domain", () => {
+    expect(
+      brandDiscoveryInputSchema.parse({ websiteUrl: "voquarn-geo.com" }),
+    ).toEqual({
+      name: "Voquarn Geo",
+      websiteUrl: "https://voquarn-geo.com",
+    });
+  });
+
   it("normalizes URLs and extracts a lowercase registrable host", () => {
     expect(normalizeUrl(" https://WWW.Example.COM/ ")).toBe(
       "https://www.example.com",

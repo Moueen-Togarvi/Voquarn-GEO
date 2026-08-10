@@ -18,6 +18,8 @@ export type CompetitorMentionStat = {
   visibility: number | null;
   shareOfVoice: number | null;
   avgPosition: number | null;
+  sentiment: "POSITIVE" | "NEUTRAL" | "NEGATIVE" | null;
+  sentimentScore: number | null;
 };
 
 function formatPercent(value: number | null | undefined): string {
@@ -60,14 +62,20 @@ export function CompetitorTable({
       <table className="run-table">
         <thead>
           <tr>
-            <th scope="col">Name</th>
-            <th scope="col">Website</th>
-            <th scope="col">Country</th>
+            {mentionStats ? <th scope="col">#</th> : null}
+            <th scope="col">Brand</th>
+            {!mentionStats ? (
+              <>
+                <th scope="col">Website</th>
+                <th scope="col">Country</th>
+              </>
+            ) : null}
             {mentionStats ? (
               <>
                 <th scope="col">Visibility</th>
                 <th scope="col">Share of voice</th>
-                <th scope="col">Position</th>
+                <th scope="col">Rank</th>
+                <th scope="col">Sentiment</th>
                 <th scope="col">Mentions</th>
               </>
             ) : null}
@@ -75,7 +83,7 @@ export function CompetitorTable({
           </tr>
         </thead>
         <tbody>
-          {competitors.map((competitor) => {
+          {competitors.map((competitor, index) => {
             const stat = mentionStats?.[competitor.id];
             const accepted = review?.acceptedIds.has(competitor.id);
             const nameContent = linkBase ? (
@@ -86,26 +94,53 @@ export function CompetitorTable({
 
             return (
               <tr key={competitor.id}>
+                {mentionStats ? (
+                  <td className="brand-rank">{index + 1}</td>
+                ) : null}
                 <td>
-                  <strong>{nameContent}</strong>
-                  <br />
-                  <small className="muted-text">{competitor.domain}</small>
+                  <span className="brand-table-identity">
+                    <span className="brand-table-avatar" aria-hidden="true">
+                      {competitor.name.charAt(0).toUpperCase()}
+                    </span>
+                    <span>
+                      <strong>{nameContent}</strong>
+                      <small className="muted-text">{competitor.domain}</small>
+                    </span>
+                  </span>
                 </td>
-                <td>
-                  <a
-                    href={competitor.websiteUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {competitor.domain}
-                  </a>
-                </td>
-                <td>{competitor.country ?? "—"}</td>
+                {!mentionStats ? (
+                  <>
+                    <td>
+                      <a
+                        href={competitor.websiteUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {competitor.domain}
+                      </a>
+                    </td>
+                    <td>{competitor.country ?? "—"}</td>
+                  </>
+                ) : null}
                 {mentionStats ? (
                   <>
                     <td>{formatPercent(stat?.visibility)}</td>
                     <td>{formatPercent(stat?.shareOfVoice)}</td>
                     <td>{formatPosition(stat?.avgPosition)}</td>
+                    <td>
+                      {stat?.sentimentScore != null ? (
+                        <span className="sentiment-score-cell">
+                          <span className="sentiment-score-track">
+                            <span
+                              style={{ width: `${stat.sentimentScore}%` }}
+                            />
+                          </span>
+                          <strong>{Math.round(stat.sentimentScore)}</strong>
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                     <td>{stat?.mentionCount ?? "—"}</td>
                   </>
                 ) : null}

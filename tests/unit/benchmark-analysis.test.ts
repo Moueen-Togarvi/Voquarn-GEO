@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { analyzeAnswer, detectRefusal } from "@/lib/benchmark/analysis";
+import {
+  analyzeAnswer,
+  detectRefusal,
+  normalizeCompetitorMentions,
+} from "@/lib/benchmark/analysis";
 
 describe("analyzeAnswer", () => {
   it("detects a single brand mention and reports its position", () => {
@@ -88,6 +92,18 @@ describe("analyzeAnswer", () => {
       [],
     );
     expect(result.brandMentioned).toBe(true);
+  });
+
+  it("preserves stored competitor sentiment while normalizing legacy rows", () => {
+    expect(
+      normalizeCompetitorMentions({
+        legacy: 2,
+        current: { count: 1, position: 3, sentiment: "NEGATIVE" },
+      }),
+    ).toEqual({
+      legacy: { count: 2, position: null },
+      current: { count: 1, position: 3, sentiment: "NEGATIVE" },
+    });
   });
 });
 

@@ -129,6 +129,9 @@ describe("computeCompetitorAggregates", () => {
       visibility: 0,
       shareOfVoice: 0,
       avgPosition: null,
+      sentiment: null,
+      sentimentDist: { POSITIVE: 0, NEUTRAL: 0, NEGATIVE: 0 },
+      sentimentScore: null,
     });
   });
 
@@ -137,12 +140,16 @@ describe("computeCompetitorAggregates", () => {
       run({
         brandMentioned: true,
         mentionCount: 1,
-        competitorMentions: { "comp-1": { count: 1, position: 2 } },
+        competitorMentions: {
+          "comp-1": { count: 1, position: 2, sentiment: "POSITIVE" },
+        },
       }),
       run({
         brandMentioned: false,
         mentionCount: 0,
-        competitorMentions: { "comp-1": { count: 2, position: 1 } },
+        competitorMentions: {
+          "comp-1": { count: 2, position: 1, sentiment: "NEUTRAL" },
+        },
       }),
       run({
         brandMentioned: false,
@@ -159,6 +166,9 @@ describe("computeCompetitorAggregates", () => {
       visibility: 2 / 3,
       shareOfVoice: 3 / 4,
       avgPosition: 1.5,
+      sentiment: "POSITIVE",
+      sentimentDist: { POSITIVE: 1, NEUTRAL: 1, NEGATIVE: 0 },
+      sentimentScore: 75,
     });
   });
 

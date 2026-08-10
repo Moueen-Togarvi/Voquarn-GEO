@@ -118,6 +118,11 @@ export async function upsertExpandedCompetitors(
     select: { domain: true, workspaceId: true },
   });
 
+  const existingCount = await scopedDb(ctx).competitor.count({
+    where: { brandId, OR: [{ tier: "TOP" }, { tier: null }] },
+  });
+  const remainingSlots = Math.max(0, 30 - existingCount);
+
   // Not a created-vs-updated count: this step can be replayed by Inngest
   // (a transient failure partway through re-runs the whole step from the
   // top), and upsert() makes that safe for the DB rows themselves, but a
@@ -126,7 +131,7 @@ export async function upsertExpandedCompetitors(
   // (memoized) LLM call returned is deterministic regardless.
   let processedCount = 0;
 
-  for (const item of items) {
+  for (const item of items.slice(0, remainingSlots)) {
     const domain = domainFromUrl(item.websiteUrl);
     // Defensive — mirrors brandInputSchema's superRefine in
     // validation/brand.ts, in case the model ignores the "don't include the

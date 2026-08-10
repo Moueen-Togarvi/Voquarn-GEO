@@ -1,7 +1,14 @@
 import { NonRetriableError } from "inngest";
 
 import type { WorkspaceContext } from "@/lib/auth/context";
-import { createBrand, updateBrand } from "@/lib/brands/service";
+import { createBrand, setBrandMarket, updateBrand } from "@/lib/brands/service";
+import {
+  cacheRobots,
+  getCachedRobots,
+  persistAiCrawlerAccess,
+} from "@/lib/crawl/service";
+import { fetchPageForCrawl } from "@/lib/crawl/fetcher";
+import { auditAiCrawlerAccess } from "@/lib/geo/ai-crawler-audit";
 import {
   buildDiscoveryRequest,
   fixtureProfile,
@@ -18,6 +25,7 @@ import { inngest } from "@/lib/inngest/client";
 import {
   brandDiscoveryRequested,
   competitorExpansionRequested,
+  promptsGenerationRequested,
 } from "@/lib/inngest/events";
 import { resolveDefault } from "@/lib/llm/registry";
 import type { LlmSource, LlmUsage } from "@/lib/llm/types";
@@ -32,6 +40,7 @@ import {
 import { withProviderCall } from "@/lib/providers/instrument";
 import { recordUsage, USAGE_METERS } from "@/lib/usage/ledger";
 import type { BrandDiscoveryInput } from "@/lib/validation/brand";
+import { findOrCreateMarket } from "@/lib/markets/service";
 
 type DiscoveryResult = {
   profile: ReturnType<typeof parseDiscoveredProfile>;
@@ -183,20 +192,66 @@ export const brandDiscovery = inngest.createFunction(
       return saved;
     });
 
-    await step.run("complete-operation", async () => {
-      if (!brandId) {
-        await setOperationBrand(ctx, operationId, brand.id);
-      }
-      await completeOperation(ctx, operationId, {
-        metadata: {
-          brandId: brand.id,
-          sourceCount: discovery.sources.length,
-          pagesAnalyzed: snapshot.pages.length,
-        },
+    if (!brandId) {
+      await step.run("attach-operation-brand", () =>
+        setOperationBrand(ctx, operationId, brand.id),
+      );
+    }
+
+    // New projects receive a usable default market before Step 2 so prompt
+    // generation can happen while the user reviews the AI-discovered profile.
+    // Re-analysis keeps the project's existing market unchanged.
+    if (!brandId) {
+      await step.run("configure-onboarding-market", async () => {
+        const market = await findOrCreateMarket(ctx, {
+          country: "US",
+          region: null,
+          city: null,
+          language: "en",
+          device: "DESKTOP",
+          timezone: "UTC",
+        });
+        await setBrandMarket(ctx, brand.id, {
+          defaultMarketId: market.id,
+          timezone: market.timezone,
+        });
       });
+    }
+
+    // Best-effort GEO finding: is this domain blocking the crawlers that
+    // actually feed AI answers? Reuses the exact fetch-cache-audit-persist
+    // recipe crawl.ts uses for a full site crawl, but standalone — a single
+    // robots.txt fetch, never gating discovery's own completion. Runs for
+    // both first-time onboarding and re-analysis since robots.txt can change;
+    // the 24h robots cache keeps repeats near-free. Any failure here (fetch
+    // error, timeout, malformed body) is swallowed — this is an enrichment,
+    // never a reason to fail brand discovery itself.
+    await step.run("audit-ai-crawlers", async () => {
+      try {
+        const host = brand.domain;
+        let robotsBody = await getCachedRobots(host);
+        if (robotsBody === null) {
+          const outcome = await fetchPageForCrawl(
+            `https://${host}/robots.txt`,
+            {
+              allowedContentTypes: null,
+            },
+          );
+          if (outcome.kind === "ok") {
+            robotsBody = outcome.result.html;
+            await cacheRobots(host, robotsBody);
+          }
+        }
+        await persistAiCrawlerAccess(host, auditAiCrawlerAccess(robotsBody));
+      } catch (error) {
+        log.warn(
+          { err: error instanceof Error ? error.message : String(error) },
+          "ai crawler audit failed, continuing",
+        );
+      }
     });
 
-    // Fires the larger Top/Middle/Bottom competitor set as a separate,
+    // Fires the larger ranked Top-30 competitor set as a separate,
     // background pipeline rather than folding it into this function — see
     // src/lib/inngest/functions/competitor-expansion.ts. Wrapped in step.run
     // for the same memoization guarantee every other step here relies on:
@@ -206,7 +261,7 @@ export const brandDiscovery = inngest.createFunction(
       const operation = await createOperation(ctx, {
         kind: "COMPETITOR_EXPANSION",
         brandId: brand.id,
-        progressTotal: 3,
+        progressTotal: 1,
       });
       await inngest.send(
         competitorExpansionRequested.create({
@@ -216,6 +271,36 @@ export const brandDiscovery = inngest.createFunction(
         }),
       );
     });
+
+    if (!brandId) {
+      await step.run("trigger-prompt-generation", async () => {
+        const operation = await createOperation(ctx, {
+          kind: "PROMPT_GENERATION",
+          brandId: brand.id,
+          progressTotal: 3,
+        });
+        await inngest.send(
+          promptsGenerationRequested.create({
+            workspaceId,
+            brandId: brand.id,
+            operationId: operation.id,
+          }),
+        );
+      });
+    }
+
+    // Complete only after both Step-2 background operations exist. The client
+    // navigates as soon as this operation settles, so completing earlier would
+    // race the review page and briefly show neither prompts nor progress.
+    await step.run("complete-operation", () =>
+      completeOperation(ctx, operationId, {
+        metadata: {
+          brandId: brand.id,
+          sourceCount: discovery.sources.length,
+          pagesAnalyzed: snapshot.pages.length,
+        },
+      }),
+    );
 
     log.info({ brandId: brand.id }, "brand discovery completed");
 

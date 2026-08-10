@@ -21,18 +21,13 @@ import {
 } from "@/lib/operations/service";
 import { withProviderCall } from "@/lib/providers/instrument";
 
-const TIERS: CompetitorTier[] = ["TOP", "MIDDLE", "BOTTOM"];
+const TIERS: CompetitorTier[] = ["TOP"];
 
 type TierOutcome = { processed: number; failed: boolean };
 
 /**
- * Fetches Top/Middle/Bottom competitor tiers as three separate, small LLM
- * calls rather than one large one, and persists each tier immediately after
- * its own call returns — a client polling this operation sees Top land
- * first, then Middle, then Bottom, instead of waiting for all three (or
- * timing out) at once. If one tier's LLM call exhausts its retries, that
- * tier is recorded as failed and the loop continues to the next tier rather
- * than failing the whole run — a partial competitor list is still useful.
+ * Builds one ranked list of direct competitors. The onboarding product keeps
+ * a hard limit of 30; adjacent and tangential tiers are intentionally omitted.
  */
 export const competitorExpansion = inngest.createFunction(
   {
